@@ -1,0 +1,216 @@
+# ===================================
+# Python / Backend
+# ===================================
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+backend/venv/
+backend/env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+
+# ===================================
+# Node.js / Frontend
+# ===================================
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+frontend/.next/
+frontend/out/
+
+# Production build
+build/
+dist/
+frontend/build/
+frontend/dist/
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# ===================================
+# IDEs / Editors
+# ===================================
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ===================================
+# Operating System
+# ===================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ===================================
+# Logs
+# ===================================
+
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ===================================
+# Docker
+# ===================================
+
+# Docker volumes (keep docker-compose.yml)
+elasticsearch_data/
+
+# ===================================
+# Project Specific
+# ===================================
+
+# Match folder with large video files
+FAN-ZHENDONG_vs_TRULS-MOREGARD/
+
+# Large video files (optional - uncomment if you don't want to track videos)
+# *.mp4
+# *.avi
+# *.mov
+# *.mkv
+# backend/videos/*.mp4
+
+# Thumbnails (if auto-generated)
+# *.jpg
+# *.jpeg
+# *.png
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Database files (if using SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# API keys and secrets
+secrets/
+*.key
+*.pem
+*.crt
+
+# ===================================
+# Misc
+# ===================================
+
+# Lock files (keep package-lock.json and requirements.txt)
+# Uncomment if you prefer not to track lock files
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Test files
+test-results/
+coverage/
