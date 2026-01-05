@@ -10,8 +10,6 @@ ENV/
 backend/venv/
 backend/env/
 
-echo backend/videos/*.mp4 >> .gitignore
-
 # Python cache
 __pycache__/
 *.py[cod]
@@ -174,12 +172,15 @@ elasticsearch_data/
 # Match folder with large video files
 FAN-ZHENDONG_vs_TRULS-MOREGARD/
 
-# Large video files (optional - uncomment if you don't want to track videos)
-# *.mp4
-# *.avi
-# *.mov
-# *.mkv
-# backend/videos/*.mp4
+# Video files - ignore all videos in the project
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.flv
+*.wmv
+backend/videos/*.mp4
 
 # Thumbnails (if auto-generated)
 # *.jpg
