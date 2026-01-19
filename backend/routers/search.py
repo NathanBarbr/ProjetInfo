@@ -3,12 +3,11 @@ Search router - Elasticsearch integration for point search
 """
 
 import os
-from typing import Optional, List
-from pathlib import Path
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
-from elasticsearch import Elasticsearch
-import pandas as pd
 import json
+from typing import Optional
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -16,44 +15,48 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 ES_INDEX = "pingpong_points"
 
-# Lazy connection to Elasticsearch
-_es_client = None
 
-
-def get_es_client() -> Elasticsearch:
-    """Get or create Elasticsearch client."""
-    global _es_client
-    if _es_client is None:
-        _es_client = Elasticsearch(ES_HOST)
-    return _es_client
+def es_request(method: str, path: str, body: dict = None) -> dict:
+    """Effectue une requête HTTP vers Elasticsearch."""
+    url = f"{ES_HOST}{path}"
+    headers = {"Content-Type": "application/json"}
+    
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode('utf-8')
+    
+    req = Request(url, data=data, headers=headers, method=method)
+    
+    try:
+        with urlopen(req) as response:
+            return json.loads(response.read().decode('utf-8'))
+    except HTTPError as e:
+        if e.code == 404:
+            return {"found": False, "status": 404}
+        error_body = e.read().decode('utf-8')
+        raise Exception(f"ES Error {e.code}: {error_body}")
+    except URLError as e:
+        raise Exception(f"Cannot connect to Elasticsearch: {e}")
 
 
 def check_es_connection() -> bool:
     """Check if Elasticsearch is available."""
     try:
-        es = get_es_client()
-        return es.ping()
+        es_request("GET", "/")
+        return True
     except Exception:
         return False
 
 
-# Index mapping for points data
-POINTS_MAPPING = {
-    "mappings": {
-        "properties": {
-            "video_id": {"type": "keyword"},
-            "set_number": {"type": "integer"},
-            "point_number": {"type": "integer"},
-            "clip_id": {"type": "keyword"},
-            "winner": {"type": "keyword"},
-            "score": {"type": "text"},
-            "description": {"type": "text", "analyzer": "standard"},
-            "tags": {"type": "keyword"},
-            "duration_seconds": {"type": "float"},
-            # Add more fields as needed based on the CSV structure
-        }
-    }
-}
+def check_index_exists() -> bool:
+    """Check if the index exists."""
+    try:
+        es_request("GET", f"/{ES_INDEX}")
+        return True
+    except Exception as e:
+        if "404" in str(e):
+            return False
+        return True
 
 
 @router.get("/status")
@@ -62,20 +65,69 @@ async def get_search_status():
     Check Elasticsearch connection status.
     """
     connected = check_es_connection()
+    
+    index_info = None
+    if connected:
+        try:
+            count_result = es_request("GET", f"/{ES_INDEX}/_count")
+            index_info = {"exists": True, "count": count_result.get("count", 0)}
+        except Exception:
+            index_info = {"exists": False, "count": 0}
+    
     return {
         "elasticsearch": {
             "connected": connected,
             "host": ES_HOST,
-            "index": ES_INDEX
+            "index": ES_INDEX,
+            "index_info": index_info
         }
     }
 
 
-@router.post("/index")
-async def index_csv(file: UploadFile = File(...)):
+@router.get("")
+async def search_points(
+    # Filtres par joueur/match
+    match_id: Optional[str] = Query(None, description="ID du match"),
+    player: Optional[str] = Query(None, description="Nom du joueur (filtre sur player_A ou player_B)"),
+    winner: Optional[str] = Query(None, description="Gagnant du point"),
+    serveur: Optional[str] = Query(None, description="Serveur du point"),
+    
+    # Filtres par set/score
+    set_num: Optional[int] = Query(None, description="Numéro du set"),
+    
+    # Filtres par caractéristiques du point
+    nb_coups_min: Optional[int] = Query(None, description="Nombre minimum de coups"),
+    nb_coups_max: Optional[int] = Query(None, description="Nombre maximum de coups"),
+    
+    # Filtres par type de coup
+    effet: Optional[str] = Query(None, description="Effet recherché (topspin, poussette, block, flip)"),
+    lateralite: Optional[str] = Query(None, description="Latéralité (coup_droit, revers)"),
+    
+    # Filtres par fautes / coup gagnant / statut
+    faute_type: Optional[str] = Query(None, description="Type de faute (out, filet, pt_gagne)"),
+    winning_shot: Optional[str] = Query(None, description="Type de coup gagnant (dernier_coup)"),
+    winning_shot_status: Optional[str] = Query(None, description="Statut du dernier coup: 'winner' (point gagné), 'error' (faute), ou None"),
+    
+    # Filtres par zone et service
+    zone: Optional[str] = Query(None, description="Zone de jeu (m1, g2, d3, etc.)"),
+    service_zone: Optional[str] = Query(None, description="Zone de service"),
+    service_lateralite: Optional[str] = Query(None, description="Latéralité du service (coup_droit, revers)"),
+    
+    # Recherche textuelle
+    q: Optional[str] = Query(None, description="Recherche textuelle dans les séquences"),
+    
+    # Pagination
+    page: int = Query(1, ge=1, description="Numéro de page"),
+    size: int = Query(20, ge=1, le=100, description="Nombre de résultats par page")
+):
     """
-    Index a CSV file containing points data.
-    The CSV should have columns matching the index mapping.
+    Recherche de points avec filtres multiples.
+    
+    Exemples:
+    - /api/search?winner=FAN-ZHENDONG&nb_coups_min=5
+    - /api/search?effet=topspin&set_num=3
+    - /api/search?q=topspin&faute_type=out
+    - /api/search?player=FAN-ZHENDONG (tous les matchs de ce joueur)
     """
     if not check_es_connection():
         raise HTTPException(
@@ -83,151 +135,223 @@ async def index_csv(file: UploadFile = File(...)):
             detail="Elasticsearch is not available. Make sure Docker is running."
         )
     
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(
-            status_code=400,
-            detail="File must be a CSV"
-        )
-    
-    try:
-        # Read CSV
-        content = await file.read()
-        df = pd.read_csv(pd.io.common.BytesIO(content))
-        
-        es = get_es_client()
-        
-        # Create index if it doesn't exist
-        if not es.indices.exists(index=ES_INDEX):
-            es.indices.create(index=ES_INDEX, body=POINTS_MAPPING)
-        
-        # Index documents
-        indexed_count = 0
-        for _, row in df.iterrows():
-            doc = row.to_dict()
-            # Convert NaN to None
-            doc = {k: (None if pd.isna(v) else v) for k, v in doc.items()}
-            
-            es.index(index=ES_INDEX, document=doc)
-            indexed_count += 1
-        
-        # Refresh index
-        es.indices.refresh(index=ES_INDEX)
-        
+    if not check_index_exists():
         return {
-            "success": True,
-            "indexed_count": indexed_count,
-            "columns": list(df.columns)
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error indexing CSV: {str(e)}"
-        )
-
-
-@router.get("")
-async def search_points(
-    q: str = Query(default="", description="Search query"),
-    video_id: Optional[str] = Query(default=None, description="Filter by video"),
-    set_number: Optional[int] = Query(default=None, description="Filter by set"),
-    winner: Optional[str] = Query(default=None, description="Filter by point winner"),
-    page: int = Query(default=1, ge=1, description="Page number"),
-    size: int = Query(default=20, ge=1, le=100, description="Results per page"),
-):
-    """
-    Search for points with filters.
-    """
-    if not check_es_connection():
-        raise HTTPException(
-            status_code=503,
-            detail="Elasticsearch is not available"
-        )
-    
-    es = get_es_client()
-    
-    # Check if index exists
-    if not es.indices.exists(index=ES_INDEX):
-        return {
-            "results": [],
             "total": 0,
             "page": page,
             "size": size,
-            "message": "No data indexed yet. Upload a CSV first."
+            "pages": 0,
+            "points": [],
+            "message": "No data indexed yet. Run: python backend/scripts/index_to_elasticsearch.py"
         }
     
-    # Build query
+    # Construire la requête
     must_clauses = []
     filter_clauses = []
     
-    # Full-text search
+    # Filtres exacts (keyword)
+    if match_id:
+        filter_clauses.append({"term": {"match_id": match_id}})
+    
+    if player:
+        filter_clauses.append({
+            "bool": {
+                "should": [
+                    {"term": {"player_A": player}},
+                    {"term": {"player_B": player}}
+                ],
+                "minimum_should_match": 1
+            }
+        })
+    
+    if winner:
+        filter_clauses.append({"term": {"winner": winner}})
+    
+    if serveur:
+        filter_clauses.append({"term": {"serveur": serveur}})
+    
+    if set_num:
+        filter_clauses.append({"term": {"set_num": set_num}})
+    
+    if faute_type:
+        filter_clauses.append({"term": {"faute_type": faute_type}})
+    
+    if winning_shot:
+        filter_clauses.append({"term": {"dernier_coup": winning_shot}})
+    
+    # Logique pour winning_shot_status (winner vs error)
+    if winning_shot_status == "winner":
+        filter_clauses.append({"term": {"faute_type": "pt_gagne"}})
+    elif winning_shot_status == "error":
+        # Doit être une faute (out ou filet) donc PAS pt_gagne.
+        # Note: pourrait aussi être explicitement ("out" OR "filet")
+        must_clauses.append({
+            "bool": {
+                "must_not": {"term": {"faute_type": "pt_gagne"}}
+            }
+        })
+    
+    if service_zone:
+        filter_clauses.append({"term": {"service_zone": service_zone}})
+
+    if service_lateralite:
+        filter_clauses.append({"term": {"service_lateralite": service_lateralite}})
+    
+    # Filtres range
+    if nb_coups_min is not None or nb_coups_max is not None:
+        range_clause = {"range": {"nb_coups": {}}}
+        if nb_coups_min is not None:
+            range_clause["range"]["nb_coups"]["gte"] = nb_coups_min
+        if nb_coups_max is not None:
+            range_clause["range"]["nb_coups"]["lte"] = nb_coups_max
+        filter_clauses.append(range_clause)
+    
+    # Recherche dans les séquences (match partiel)
+    if effet:
+        must_clauses.append({"match": {"sequence_effets": effet}})
+    
+    if lateralite:
+        must_clauses.append({"match": {"sequence_lateralites": lateralite}})
+    
+    if zone:
+        must_clauses.append({"match": {"sequence_zones": zone}})
+    
+    # Recherche textuelle générale
     if q:
         must_clauses.append({
             "multi_match": {
                 "query": q,
-                "fields": ["description", "tags", "score", "winner"],
-                "fuzziness": "AUTO"
+                "fields": ["sequence_coups", "sequence_effets", "sequence_zones", "winner", "serveur"]
             }
         })
     
-    # Filters
-    if video_id:
-        filter_clauses.append({"term": {"video_id": video_id}})
-    if set_number:
-        filter_clauses.append({"term": {"set_number": set_number}})
-    if winner:
-        filter_clauses.append({"term": {"winner": winner}})
+    # Construire la requête finale
+    query = {"bool": {}}
+    if must_clauses:
+        query["bool"]["must"] = must_clauses
+    if filter_clauses:
+        query["bool"]["filter"] = filter_clauses
     
-    # Build final query
-    if must_clauses or filter_clauses:
-        query = {
-            "bool": {
-                "must": must_clauses if must_clauses else [{"match_all": {}}],
-                "filter": filter_clauses
-            }
-        }
-    else:
+    # Si aucun filtre, match all
+    if not must_clauses and not filter_clauses:
         query = {"match_all": {}}
     
-    # Execute search
+    # Exécuter la recherche
     from_offset = (page - 1) * size
     
-    try:
-        response = es.search(
-            index=ES_INDEX,
-            query=query,
-            from_=from_offset,
-            size=size,
-            sort=[
-                {"set_number": "asc"},
-                {"point_number": "asc"}
-            ]
-        )
-        
-        hits = response["hits"]["hits"]
-        total = response["hits"]["total"]["value"]
-        
-        results = [
-            {
-                "id": hit["_id"],
-                **hit["_source"]
-            }
-            for hit in hits
+    search_body = {
+        "query": query,
+        "from": from_offset,
+        "size": size,
+        "sort": [
+            {"match_id": "asc"},
+            {"point_id": "asc"}
         ]
-        
-        return {
-            "results": results,
-            "total": total,
-            "page": page,
-            "size": size,
-            "pages": (total + size - 1) // size
-        }
-        
+    }
+    
+    try:
+        response = es_request("POST", f"/{ES_INDEX}/_search", search_body)
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Search error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Elasticsearch error: {str(e)}")
+    
+    # Formater les résultats
+    hits = response.get("hits", {})
+    total = hits.get("total", {}).get("value", 0)
+    points = [{"id": hit["_id"], **hit["_source"]} for hit in hits.get("hits", [])]
+    
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": (total + size - 1) // size if total > 0 else 0,
+        "points": points
+    }
+
+
+@router.get("/stats")
+async def get_search_stats():
+    """
+    Retourne des statistiques globales pour alimenter les filtres de l'UI.
+    Utile pour construire des dropdowns dynamiques.
+    """
+    if not check_es_connection():
+        raise HTTPException(status_code=503, detail="Elasticsearch is not available")
+    
+    if not check_index_exists():
+        return {"total_points": 0, "message": "No data indexed"}
+    
+    aggs_body = {
+        "size": 0,
+        "aggs": {
+            "matches": {"terms": {"field": "match_id", "size": 100}},
+            "players_A": {"terms": {"field": "player_A", "size": 50}},
+            "players_B": {"terms": {"field": "player_B", "size": 50}},
+            "winners": {"terms": {"field": "winner", "size": 50}},
+            "serveurs": {"terms": {"field": "serveur", "size": 50}},
+            "sets": {"terms": {"field": "set_num", "size": 10}},
+            "fautes": {"terms": {"field": "faute_type", "size": 20}},
+            "winning_shots": {"terms": {"field": "dernier_coup", "size": 20}},
+            "service_zones": {"terms": {"field": "service_zone", "size": 20}},
+            "service_lateralites": {"terms": {"field": "service_lateralite", "size": 10}},
+            "nb_coups_stats": {"stats": {"field": "nb_coups"}}
+        }
+    }
+    
+    try:
+        response = es_request("POST", f"/{ES_INDEX}/_search", aggs_body)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Elasticsearch error: {str(e)}")
+    
+    aggs = response.get("aggregations", {})
+    total = response.get("hits", {}).get("total", {}).get("value", 0)
+    
+    # Combiner players_A et players_B en une liste unique
+    players = set()
+    for bucket in aggs.get("players_A", {}).get("buckets", []):
+        players.add(bucket["key"])
+    for bucket in aggs.get("players_B", {}).get("buckets", []):
+        players.add(bucket["key"])
+    
+    nb_coups_stats = aggs.get("nb_coups_stats", {})
+    
+    return {
+        "total_points": total,
+        "matches": [{"id": b["key"], "count": b["doc_count"]} for b in aggs.get("matches", {}).get("buckets", [])],
+        "players": sorted(list(players)),
+        "winners": [b["key"] for b in aggs.get("winners", {}).get("buckets", [])],
+        "serveurs": [b["key"] for b in aggs.get("serveurs", {}).get("buckets", [])],
+        "sets": sorted([b["key"] for b in aggs.get("sets", {}).get("buckets", [])]),
+        "fautes": [b["key"] for b in aggs.get("fautes", {}).get("buckets", [])],
+        "winning_shots": [b["key"] for b in aggs.get("winning_shots", {}).get("buckets", [])],
+        "service_zones": [b["key"] for b in aggs.get("service_zones", {}).get("buckets", [])],
+        "service_lateralites": [b["key"] for b in aggs.get("service_lateralites", {}).get("buckets", [])],
+        "nb_coups": {
+            "min": int(nb_coups_stats.get("min", 0)) if nb_coups_stats.get("count", 0) > 0 else 0,
+            "max": int(nb_coups_stats.get("max", 0)) if nb_coups_stats.get("count", 0) > 0 else 0,
+            "avg": round(nb_coups_stats.get("avg", 0), 1) if nb_coups_stats.get("count", 0) > 0 else 0
+        }
+    }
+
+
+@router.get("/point/{match_id}/{point_id}")
+async def get_point_detail(match_id: str, point_id: int):
+    """
+    Retourne les détails d'un point spécifique.
+    """
+    if not check_es_connection():
+        raise HTTPException(status_code=503, detail="Elasticsearch is not available")
+    
+    doc_id = f"{match_id}_{point_id}"
+    
+    try:
+        response = es_request("GET", f"/{ES_INDEX}/_doc/{doc_id}")
+        if response.get("found") == False:
+            raise HTTPException(status_code=404, detail=f"Point not found: {doc_id}")
+        return {"id": response["_id"], **response["_source"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Point not found: {doc_id}")
 
 
 @router.delete("/index")
@@ -236,19 +360,12 @@ async def clear_index():
     Clear all indexed data (for re-indexing).
     """
     if not check_es_connection():
-        raise HTTPException(
-            status_code=503,
-            detail="Elasticsearch is not available"
-        )
-    
-    es = get_es_client()
+        raise HTTPException(status_code=503, detail="Elasticsearch is not available")
     
     try:
-        if es.indices.exists(index=ES_INDEX):
-            es.indices.delete(index=ES_INDEX)
+        es_request("DELETE", f"/{ES_INDEX}")
         return {"success": True, "message": "Index cleared"}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error clearing index: {str(e)}"
-        )
+        if "404" in str(e):
+            return {"success": True, "message": "Index did not exist"}
+        raise HTTPException(status_code=500, detail=f"Error clearing index: {str(e)}")

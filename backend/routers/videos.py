@@ -293,3 +293,38 @@ async def get_clip_thumbnail(video_id: str, clip_id: str):
         )
     
     return FileResponse(thumb_path, media_type="image/jpeg")
+
+
+@router.get("/{video_id}/thumbnail")
+async def get_video_thumbnail(video_id: str):
+    """
+    Get the main thumbnail for a video.
+    """
+    from fastapi.responses import FileResponse
+    
+    # 1. Look up video metadata
+    videos = load_videos_metadata()
+    video_meta = next((v for v in videos if v["id"] == video_id), None)
+    
+    if not video_meta:
+        raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
+
+    # 2. Check if thumbnail is configured
+    thumb_filename = video_meta.get("thumbnail")
+    if not thumb_filename:
+        # Return default placeholder or 404? 
+        # For now 404, frontend handle fallback
+        raise HTTPException(status_code=404, detail="No thumbnail configured for this video")
+
+    # 3. Construct path
+    # If match_folder is present, look there
+    if video_meta.get("match_folder"):
+        thumb_path = PROJECT_ROOT / video_meta["match_folder"] / thumb_filename
+    else:
+        # Otherwise look in videos dir
+        thumb_path = VIDEOS_DIR / thumb_filename
+    
+    if not thumb_path.exists():
+        raise HTTPException(status_code=404, detail=f"Thumbnail file not found: {thumb_filename}")
+        
+    return FileResponse(thumb_path, media_type="image/jpeg")

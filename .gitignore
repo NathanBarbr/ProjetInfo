@@ -169,8 +169,12 @@ elasticsearch_data/
 # Project Specific
 # ===================================
 
-# Match folder with large video files
-FAN-ZHENDONG_vs_TRULS-MOREGARD/
+# Match data in backend/videos (keep videos.json)
+backend/videos/*/
+!backend/videos/videos.json
+
+# Legacy / Root match folders
+*_vs_*/
 
 # Video files - ignore all videos in the project
 *.mp4

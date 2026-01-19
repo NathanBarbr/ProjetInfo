@@ -1,0 +1,497 @@
+\documentclass[11pt]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{pgfgantt}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\title[Recherche Vidéo Tennis de Table]{Moteur de Recherche Multimodal\\pour Vidéos de Tennis de Table}
+\subtitle{Projet Full-Stack - Analyse de Performance Sportive}
+\institute[Projet Informatique]{Projet Informatique}
+\date{\today}
+
+\begin{document}
+
+% Page de titre
+\begin{frame}
+\titlepage
+\end{frame}
+
+% Table des matières
+\begin{frame}{Plan de la présentation}
+\tableofcontents
+\end{frame}
+
+%=============================================================================
+\section{Appropriation du Sujet}
+%=============================================================================
+
+\begin{frame}{Contexte : Expertise LIRIS en Tennis de Table}
+\begin{block}{Collaboration JO Paris 2024}
+\begin{itemize}
+    \item Le laboratoire LIRIS : expertise reconnue en analyse de performance
+    \item Participation aux JO de Paris 2024 avec l'équipe de France
+    \item Doctorant en appui de l'analyse vidéo
+    \item Objectif : \textbf{Démocratiser ces outils vers le grand public}
+\end{itemize}
+\end{block}
+
+\vspace{0.3cm}
+
+\begin{block}{Problématique}
+Comment rendre accessible au grand public des outils d'analyse vidéo professionnels utilisés en compétition olympique ?
+\end{block}
+
+\vspace{0.2cm}
+\footnotesize{Source : \url{https://centralelyon.github.io/table-tennis/}}
+\end{frame}
+
+\begin{frame}{Le Défi : Recherche Multimodale}
+\begin{columns}
+\begin{column}{0.5\textwidth}
+\textbf{Modalités d'analyse :}
+\begin{itemize}
+    \item \textcolor{blue}{Visuelle} : détection de coups, trajectoires
+    \item \textcolor{green}{Sonore} : applaudissements, impacts
+    \item \textcolor{orange}{Textuelle} : commentaires, métadonnées
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Exemple de requête :}
+\begin{quote}
+\small\textit{« Tous les échanges où un joueur fait un top spin gagnant avec applaudissements du public »}
+\end{quote}
+\end{column}
+
+\begin{column}{0.5\textwidth}
+\begin{center}
+\includegraphics[width=\textwidth]{example-placeholder.png}
+\end{center}
+\footnotesize{Figure : Interface de recherche vidéo\\(inspirée de la thèse d'A. Erades)}
+\end{column}
+\end{columns}
+\end{frame}
+
+%=============================================================================
+\section{Objectifs du Projet}
+%=============================================================================
+
+\begin{frame}{Objectifs Principaux}
+\begin{enumerate}
+    \item \textbf{Accessibilité}
+    \begin{itemize}
+        \item Rendre les analyses professionnelles accessibles au grand public
+        \item Interface intuitive et rapide (\textless 100ms par requête)
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    
+    \item \textbf{Performance}
+    \begin{itemize}
+        \item Indexation de centaines de matchs
+        \item Recherche en temps réel avec filtres complexes
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    
+    \item \textbf{Intelligence}
+    \begin{itemize}
+        \item Intégration d'IA (RAG - Retrieval-Augmented Generation)
+        \item Requêtes en langage naturel
+        \item Analyses statistiques avancées
+    \end{itemize}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Cas d'Usage Concrets}
+\begin{block}{Pour les Entraîneurs}
+\begin{itemize}
+    \item Analyser les stratégies de service (long vs court)
+    \item Identifier les points faibles des adversaires
+    \item Préparer des séances d'entraînement ciblées
+\end{itemize}
+\end{block}
+
+\begin{block}{Pour les Joueurs}
+\begin{itemize}
+    \item Revoir ses propres performances
+    \item Étudier les techniques des champions
+    \item Progresser via l'analyse vidéo
+\end{itemize}
+\end{block}
+
+\begin{block}{Pour les Fans}
+\begin{itemize}
+    \item Retrouver les meilleurs points d'un match
+    \item Explorer les statistiques des joueurs
+    \item Comprendre les tactiques du jeu
+\end{itemize}
+\end{block}
+\end{frame}
+
+%=============================================================================
+\section{Cahier des Charges et Livrables}
+%=============================================================================
+
+\begin{frame}{Livrables Attendus}
+\begin{enumerate}
+    \item \textbf{Étude comparative}
+    \begin{itemize}
+        \item Comparaison des moteurs de recherche multimodaux
+        \item Elasticsearch vs Apache Solr vs alternatives
+        \item Choix justifié : \textcolor{blue}{Elasticsearch 8.11.0}
+    \end{itemize}
+    
+    \vspace{0.2cm}
+    
+    \item \textbf{Mécanisme d'indexation}
+    \begin{itemize}
+        \item Index de vidéos avec métadonnées structurées
+        \item Import CSV automatisé
+        \item Base de données de plusieurs centaines de matchs
+    \end{itemize}
+    
+    \vspace{0.2cm}
+    
+    \item \textbf{Interface de navigation}
+    \begin{itemize}
+        \item Recherche full-text avec filtres
+        \item Lecteur vidéo avec navigation par clips
+        \item Chatbot IA pour requêtes naturelles
+    \end{itemize}
+    
+    \vspace{0.2cm}
+    
+    \item \textbf{Déploiement}
+    \begin{itemize}
+        \item Architecture containerisée (Docker)
+        \item Tests sur serveur de production
+    \end{itemize}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Architecture Technique Retenue}
+\begin{center}
+\begin{tikzpicture}[node distance=1.5cm, auto]
+    % Styles
+    \tikzstyle{block} = [rectangle, draw, fill=blue!20, text width=3cm, text centered, rounded corners, minimum height=1cm]
+    \tikzstyle{data} = [rectangle, draw, fill=green!20, text width=2.5cm, text centered, rounded corners, minimum height=0.8cm]
+    \tikzstyle{arrow} = [thick,->,>=stealth]
+    
+    % Nodes
+    \node [block] (frontend) {Frontend\\Next.js + React\\TypeScript};
+    \node [block, below of=frontend, node distance=2cm] (backend) {Backend\\FastAPI + Python};
+    \node [data, below left of=backend, node distance=2cm] (elastic) {Elasticsearch\\8.11.0};
+    \node [data, below right of=backend, node distance=2cm] (openai) {OpenAI API\\GPT-3.5};
+    \node [data, below of=backend, node distance=3.5cm] (videos) {Vidéos + CSV\\Métadonnées};
+    
+    % Arrows
+    \draw [arrow] (frontend) -- node[right] {API REST} (backend);
+    \draw [arrow] (backend) -- (elastic);
+    \draw [arrow] (backend) -- (openai);
+    \draw [arrow] (backend) -- (videos);
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+%=============================================================================
+\section{Organisation et Planning}
+%=============================================================================
+
+\begin{frame}{Décomposition en Tâches}
+\begin{columns}
+\begin{column}{0.5\textwidth}
+\textbf{Phase 1 : Infrastructure}
+\begin{itemize}
+    \item[$\checkmark$] Prise en main des données CSV
+    \item[$\checkmark$] Setup Docker (Elasticsearch)
+    \item[$\checkmark$] Architecture modulaire (FastAPI + Next.js)
+\end{itemize}
+
+\vspace{0.3cm}
+
+\textbf{Phase 2 : Lecteur Vidéo}
+\begin{itemize}
+    \item[$\checkmark$] Streaming vidéo (HTTP Range)
+    \item[$\checkmark$] Gestion des clips par set/point
+    \item[$\checkmark$] Interface de navigation
+    \item[$\checkmark$] Thumbnails et métadonnées
+\end{itemize}
+\end{column}
+
+\begin{column}{0.5\textwidth}
+\textbf{Phase 3 : Recherche}
+\begin{itemize}
+    \item[$\checkmark$] Indexation Elasticsearch
+    \item[$\checkmark$] Interface de recherche full-text
+    \item[$\checkmark$] Filtres multiples (set, joueur, etc.)
+    \item[$\checkmark$] Pagination des résultats
+\end{itemize}
+
+\vspace{0.3cm}
+
+\textbf{Phase 4 : Intelligence IA}
+\begin{itemize}
+    \item[$\checkmark$] Chatbot RAG avec OpenAI
+    \item[$\checkmark$] Requêtes en langage naturel
+    \item[$\checkmark$] Intégration dans l'interface
+\end{itemize}
+
+\vspace{0.3cm}
+
+\textbf{Phase 5 : Finalisation}
+\begin{itemize}
+    \item[$\checkmark$] Tests et documentation
+    \item[$\circ$] Déploiement serveur
+\end{itemize}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Planning Gantt}
+\begin{center}
+\begin{ganttchart}[
+    hgrid,
+    vgrid,
+    x unit=0.42cm,
+    y unit title=0.5cm,
+    y unit chart=0.4cm,
+    title height=1,
+    bar/.append style={fill=blue!50},
+    bar height=0.5,
+    group/.append style={fill=orange!50},
+    title label font=\footnotesize,
+    bar label font=\scriptsize,
+    group label font=\scriptsize
+]{1}{12}
+    \gantttitle{Semaines}{12} \\
+    \gantttitlelist{1,...,12}{1} \\
+    
+    \ganttgroup{Infrastructure}{1}{2} \\
+    \ganttbar{Données \& Docker}{1}{2} \\
+    
+    \ganttgroup{Lecteur Vidéo}{3}{5} \\
+    \ganttbar{Streaming \& clips}{3}{4} \\
+    \ganttbar{Interface}{4}{5} \\
+    
+    \ganttgroup{Recherche}{6}{8} \\
+    \ganttbar{Indexation ES}{6}{7} \\
+    \ganttbar{Interface}{7}{8} \\
+    
+    \ganttgroup{IA / Chatbot}{8}{10} \\
+    \ganttbar{RAG + OpenAI}{8}{9} \\
+    \ganttbar{Intégration}{9}{10} \\
+    
+    \ganttgroup{Finalisation}{10}{12} \\
+    \ganttbar{Tests \& Docs}{10}{11} \\
+    \ganttbar{Déploiement}{12}{12}
+\end{ganttchart}
+\end{center}
+\end{frame}
+
+\begin{frame}{Méthodologie Agile}
+\begin{center}
+% Remplace 'schema_agile.png' par le nom de ton image
+\includegraphics[width=0.85\textwidth]{schema_agile.png}
+\end{center}
+
+\vspace{0.3cm}
+\textbf{Méthodologie :} Développement agile avec itérations courtes 
+\end{frame}
+
+%=============================================================================
+\section{État d'Avancement}
+%=============================================================================
+
+\begin{frame}{Fonctionnalités Implémentées}
+\begin{block}{Backend (FastAPI)}
+\begin{itemize}
+    \item[$\checkmark$] \textbf{Streaming vidéo} : HTTP Range Requests, chunks 1MB
+    \item[$\checkmark$] \textbf{Gestion clips} : Organisation par set/point, thumbnails
+    \item[$\checkmark$] \textbf{Elasticsearch} : Indexation CSV, recherche full-text, filtres
+    \item[$\checkmark$] \textbf{Chatbot RAG} : OpenAI GPT-3.5, contexte conversationnel
+    \item[$\checkmark$] \textbf{Architecture modulaire} : 3 routers (videos, search, chat)
+\end{itemize}
+\end{block}
+
+\begin{block}{Frontend (Next.js)}
+\begin{itemize}
+    \item[$\checkmark$] \textbf{Lecteur vidéo} : Contrôles avancés, navigation fluide
+    \item[$\checkmark$] \textbf{Interface recherche} : Filtres multiples, pagination
+    \item[$\checkmark$] \textbf{Navigation clips} : Groupement par set, aperçus visuels
+    \item[$\checkmark$] \textbf{Widget chatbot} : Interface conversationnelle
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{Démonstration des Capacités}
+\begin{columns}
+\begin{column}{0.5\textwidth}
+\textbf{Recherche Elasticsearch}
+\begin{itemize}
+    \item Fuzzy matching (tolérance fautes)
+    \item Filtres : vidéo, set, gagnant
+    \item Pagination efficace
+    \item Temps de réponse : \textless 50ms
+\end{itemize}
+
+\vspace{0.3cm}
+
+\textbf{Chatbot IA}
+\begin{itemize}
+    \item Requêtes en langage naturel
+    \item Historique conversationnel
+    \item Résultats cliquables
+    \item Fallback sans OpenAI
+\end{itemize}
+\end{column}
+
+\begin{column}{0.5\textwidth}
+\textbf{Streaming Vidéo}
+\begin{itemize}
+    \item Seek instantané
+    \item Optimisation bande passante
+    \item Support multi-sources
+    \item CORS configuré
+\end{itemize}
+
+\vspace{0.3cm}
+
+\textbf{Gestion de Clips}
+\begin{itemize}
+    \item Organisation hiérarchique
+    \item Thumbnails automatiques
+    \item Navigation rapide
+    \item API dédiée
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{0.4cm}
+\begin{center}
+\textbf{Exemple de match indexé :} Fan Zhendong vs Truls Moregard (JO Paris 2024)
+\end{center}
+\end{frame}
+
+\begin{frame}{Métriques et Performances}
+\begin{table}
+\centering
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Métrique} & \textbf{Valeur} \\
+\hline
+Temps de réponse API & \textless 100ms \\
+Taille chunks vidéo & 1 MB \\
+Points indexés (exemple) & $\sim$100 points/match \\
+Modalités supportées & 3 (visuel, texte, métadonnées) \\
+Composants frontend & 4 principaux \\
+\hline
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+
+\begin{block}{Technologies maîtrisées}
+\begin{itemize}
+    \item Architecture Full-Stack moderne
+    \item Recherche full-text avancée
+    \item Intelligence Artificielle (RAG)
+    \item Containerisation Docker
+    \item TypeScript \& React Hooks
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{Prochaines Étapes}
+\begin{enumerate}
+    \item \textbf{Court terme}
+    \begin{itemize}
+        \item Déploiement sur serveur de test
+        \item Tests de charge et optimisation
+        \item Enrichissement des métadonnées
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    
+    \item \textbf{Améliorations futures}
+    \begin{itemize}
+        \item Analyse audio (détection applaudissements)
+        \item Interface d'administration
+        \item Export de statistiques
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    
+    \item \textbf{Scalabilité}
+    \begin{itemize}
+        \item Support de milliers de matchs
+        \item Clustering Elasticsearch
+        \item CDN pour les vidéos
+    \end{itemize}
+\end{enumerate}
+\end{frame}
+
+%=============================================================================
+\section{Conclusion}
+%=============================================================================
+
+\begin{frame}{Bilan du Projet}
+\begin{block}{Objectifs à atteindre}
+\begin{itemize}
+    \item[$\checkmark$] Moteur de recherche multimodal fonctionnel
+    \item[$\checkmark$] Interface utilisateur intuitive et rapide
+    \item[$\checkmark$] Intégration IA pour requêtes naturelles
+    \item[$\checkmark$] Architecture scalable et moderne
+\end{itemize}
+\end{block}
+
+\vspace{0.3cm}
+
+\begin{block}{Compétences développées}
+\begin{itemize}
+    \item Développement Full-Stack avancé
+    \item Moteurs de recherche (Elasticsearch)
+    \item Intelligence Artificielle (RAG, OpenAI)
+    \item Streaming vidéo et optimisation
+    \item DevOps (Docker, API REST)
+\end{itemize}
+\end{block}
+
+\vspace{0.3cm}
+
+\end{frame}
+
+\begin{frame}{Q/R}
+\begin{center}
+
+\vspace{1cm}
+
+\Large{Questions / Réponses}
+\end{center}
+
+\vspace{1cm}
+
+\begin{block}{Accès au projet}
+\begin{itemize}
+    \item Code source : GitHub (disponible sur demande)
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\begin{center}
+\Huge{Merci pour votre attention !}
+
+\vspace{1cm}
+
+\Large{Questions ?}
+\end{center}
+\end{frame}
+
+\end{document}
