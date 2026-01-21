@@ -259,7 +259,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
         <div className="w-full max-w-4xl mx-auto">
             {/* Video container */}
             <div
-                className="relative rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl shadow-black/50 group"
+                className="relative rounded-xl overflow-hidden bg-zinc-900 border border-border shadow-2xl shadow-black/50 group"
                 onMouseEnter={() => setShowControls(true)}
             >
                 {/* Video element */}
@@ -468,22 +468,22 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
             </div>
 
             {/* Keyboard shortcuts hint */}
-            <div className="mt-4 flex items-center justify-center gap-6 text-xs text-zinc-600">
-                <span><kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-500">Space</kbd> Play/Pause</span>
-                <span><kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-500">←</kbd> <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-500">→</kbd> Skip 10s</span>
-                <span><kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-500">F</kbd> Fullscreen</span>
+            <div className="mt-4 flex items-center justify-center gap-6 text-xs text-muted-foreground">
+                <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-foreground font-mono">Space</kbd> Play/Pause</span>
+                <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-foreground font-mono">←</kbd> <kbd className="px-1.5 py-0.5 bg-muted rounded text-foreground font-mono">→</kbd> Skip 10s</span>
+                <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-foreground font-mono">F</kbd> Fullscreen</span>
             </div>
 
             {/* Metadata section */}
             {(title || description) && (
                 <div className="mt-6 space-y-2">
                     {title && (
-                        <h2 className="text-xl font-medium text-zinc-100 tracking-tight">
+                        <h2 className="text-xl font-medium text-foreground tracking-tight">
                             {title}
                         </h2>
                     )}
                     {description && (
-                        <p className="text-sm text-zinc-500">
+                        <p className="text-sm text-muted-foreground">
                             {description}
                         </p>
                     )}

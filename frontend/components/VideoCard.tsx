@@ -12,17 +12,28 @@ interface VideoCardProps {
 export default function VideoCard({ id, title, description }: VideoCardProps) {
     return (
         <Link href={`/watch/${id}`} className="group block">
-            <div className="relative rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 transition-all duration-300 hover:border-zinc-700 hover:shadow-xl hover:shadow-purple-500/10 hover:scale-[1.02]">
-                {/* Thumbnail placeholder */}
-                <div className="aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center relative overflow-hidden">
-                    {/* Video icon */}
-                    <svg
-                        className="w-16 h-16 text-zinc-700 group-hover:text-purple-500/50 transition-colors duration-300"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path d="M8 5v14l11-7z" />
-                    </svg>
+            <div className="relative rounded-xl overflow-hidden bg-card border border-border transition-all duration-300 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10 hover:scale-[1.02]">
+                {/* Thumbnail */}
+                <div className="aspect-video bg-muted relative overflow-hidden">
+                    <img
+                        src={`http://localhost:8000/api/videos/${id}/thumbnail`}
+                        alt={title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                        }}
+                    />
+
+                    {/* Fallback pattern (visible if img hidden) */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-muted to-card flex items-center justify-center -z-10">
+                        <svg
+                            className="w-16 h-16 text-muted-foreground group-hover:text-primary/50 transition-colors duration-300"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path d="M8 5v14l11-7z" />
+                        </svg>
+                    </div>
 
                     {/* Hover overlay with play button */}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -36,11 +47,11 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
 
                 {/* Video info */}
                 <div className="p-4">
-                    <h3 className="text-zinc-100 font-medium text-sm truncate group-hover:text-white transition-colors">
+                    <h3 className="text-foreground font-medium text-sm truncate group-hover:text-primary transition-colors">
                         {title}
                     </h3>
                     {description && (
-                        <p className="text-zinc-500 text-xs mt-1 line-clamp-2">
+                        <p className="text-muted-foreground text-xs mt-1 line-clamp-2">
                             {description}
                         </p>
                     )}

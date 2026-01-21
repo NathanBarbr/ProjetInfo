@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import VideoCard from "@/components/VideoCard";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface Video {
   id: string;
@@ -34,22 +35,25 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#141414]">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-[#141414]/80 border-b border-zinc-800/50">
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b border-border">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-zinc-100 tracking-tight">
+          <h1 className="text-xl font-semibold text-foreground tracking-tight">
             Video Gallery
           </h1>
-          <Link
-            href="/search"
-            className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            Search
-          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Link
+              href="/search"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Search
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -58,17 +62,17 @@ export default function Home() {
         {/* Loading state */}
         {loading && (
           <div className="flex items-center justify-center py-20">
-            <div className="w-10 h-10 border-4 border-zinc-700 border-t-purple-500 rounded-full animate-spin"></div>
+            <div className="w-10 h-10 border-4 border-muted/30 border-t-primary rounded-full animate-spin"></div>
           </div>
         )}
 
         {/* Error state */}
         {error && (
           <div className="text-center py-12">
-            <p className="text-zinc-500 text-sm">
+            <p className="text-muted-foreground text-sm">
               Unable to connect to server. Make sure the backend is running.
             </p>
-            <code className="mt-2 text-xs text-zinc-600 block">
+            <code className="mt-2 text-xs text-muted-foreground/80 block">
               uvicorn main:app --reload
             </code>
           </div>
@@ -77,13 +81,13 @@ export default function Home() {
         {/* Empty state */}
         {!loading && !error && videos.length === 0 && (
           <div className="text-center py-20">
-            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-zinc-800 flex items-center justify-center">
-              <svg className="w-10 h-10 text-zinc-600" fill="currentColor" viewBox="0 0 24 24">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-secondary flex items-center justify-center">
+              <svg className="w-10 h-10 text-muted-foreground" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z" />
               </svg>
             </div>
-            <p className="text-zinc-500">No videos available</p>
-            <p className="text-zinc-600 text-sm mt-1">
+            <p className="text-muted-foreground">No videos available</p>
+            <p className="text-muted-foreground/80 text-sm mt-1">
               Add videos to the backend/videos folder
             </p>
           </div>

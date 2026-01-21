@@ -155,6 +155,7 @@ def get_match_folder(video_id: str) -> Path | None:
     return None
 
 
+
 def get_clips_for_video(video_id: str) -> dict:
     """
     Get all clips for a video, grouped by set.
@@ -179,7 +180,13 @@ def get_clips_for_video(video_id: str) -> dict:
                 
                 # Check if mp4 exists
                 clip_file = point_dir / f"{point_dir.name}.mp4"
-                thumb_file = point_dir / f"{point_dir.name}.jpg"
+                
+                # Check for thumbnails (priority order)
+                has_thumb = False
+                for suffix in ["_crop_carre.jpg", ".jpg"]:
+                    if (point_dir / f"{point_dir.name}{suffix}").exists():
+                        has_thumb = True
+                        break
                 
                 if clip_file.exists():
                     if set_num not in sets:
@@ -188,7 +195,7 @@ def get_clips_for_video(video_id: str) -> dict:
                     sets[set_num].append({
                         "id": point_dir.name,
                         "point": point_num,
-                        "has_thumbnail": thumb_file.exists()
+                        "has_thumbnail": has_thumb
                     })
     
     # Sort points within each set
@@ -274,6 +281,9 @@ async def stream_clip(video_id: str, clip_id: str, request: Request):
 async def get_clip_thumbnail(video_id: str, clip_id: str):
     """
     Get thumbnail image for a clip.
+    Tries multiple filename formats:
+    1. {clip_id}_crop_carre.jpg (Preferred)
+    2. {clip_id}.jpg (Standard)
     """
     from fastapi.responses import FileResponse
     
@@ -284,15 +294,23 @@ async def get_clip_thumbnail(video_id: str, clip_id: str):
             detail=f"Video '{video_id}' has no clips"
         )
     
-    thumb_path = match_folder / "clips" / clip_id / f"{clip_id}.jpg"
+    clip_dir = match_folder / "clips" / clip_id
     
-    if not thumb_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Thumbnail for clip '{clip_id}' not found"
-        )
+    # Try different thumbnail names
+    possible_names = [
+        f"{clip_id}_crop_carre.jpg",
+        f"{clip_id}.jpg"
+    ]
     
-    return FileResponse(thumb_path, media_type="image/jpeg")
+    for name in possible_names:
+        thumb_path = clip_dir / name
+        if thumb_path.exists():
+            return FileResponse(thumb_path, media_type="image/jpeg")
+    
+    raise HTTPException(
+        status_code=404,
+        detail=f"Thumbnail for clip '{clip_id}' not found"
+    )
 
 
 @router.get("/{video_id}/thumbnail")

@@ -59,93 +59,25 @@ def check_index_exists() -> bool:
         return True
 
 
-@router.get("/status")
-async def get_search_status():
-    """
-    Check Elasticsearch connection status.
-    """
-    connected = check_es_connection()
-    
-    index_info = None
-    if connected:
-        try:
-            count_result = es_request("GET", f"/{ES_INDEX}/_count")
-            index_info = {"exists": True, "count": count_result.get("count", 0)}
-        except Exception:
-            index_info = {"exists": False, "count": 0}
-    
-    return {
-        "elasticsearch": {
-            "connected": connected,
-            "host": ES_HOST,
-            "index": ES_INDEX,
-            "index_info": index_info
-        }
-    }
-
-
-@router.get("")
-async def search_points(
-    # Filtres par joueur/match
-    match_id: Optional[str] = Query(None, description="ID du match"),
-    player: Optional[str] = Query(None, description="Nom du joueur (filtre sur player_A ou player_B)"),
-    winner: Optional[str] = Query(None, description="Gagnant du point"),
-    serveur: Optional[str] = Query(None, description="Serveur du point"),
-    
-    # Filtres par set/score
-    set_num: Optional[int] = Query(None, description="Numéro du set"),
-    
-    # Filtres par caractéristiques du point
-    nb_coups_min: Optional[int] = Query(None, description="Nombre minimum de coups"),
-    nb_coups_max: Optional[int] = Query(None, description="Nombre maximum de coups"),
-    
-    # Filtres par type de coup
-    effet: Optional[str] = Query(None, description="Effet recherché (topspin, poussette, block, flip)"),
-    lateralite: Optional[str] = Query(None, description="Latéralité (coup_droit, revers)"),
-    
-    # Filtres par fautes / coup gagnant / statut
-    faute_type: Optional[str] = Query(None, description="Type de faute (out, filet, pt_gagne)"),
-    winning_shot: Optional[str] = Query(None, description="Type de coup gagnant (dernier_coup)"),
-    winning_shot_status: Optional[str] = Query(None, description="Statut du dernier coup: 'winner' (point gagné), 'error' (faute), ou None"),
-    
-    # Filtres par zone et service
-    zone: Optional[str] = Query(None, description="Zone de jeu (m1, g2, d3, etc.)"),
-    service_zone: Optional[str] = Query(None, description="Zone de service"),
-    service_lateralite: Optional[str] = Query(None, description="Latéralité du service (coup_droit, revers)"),
-    
-    # Recherche textuelle
-    q: Optional[str] = Query(None, description="Recherche textuelle dans les séquences"),
-    
-    # Pagination
-    page: int = Query(1, ge=1, description="Numéro de page"),
-    size: int = Query(20, ge=1, le=100, description="Nombre de résultats par page")
-):
-    """
-    Recherche de points avec filtres multiples.
-    
-    Exemples:
-    - /api/search?winner=FAN-ZHENDONG&nb_coups_min=5
-    - /api/search?effet=topspin&set_num=3
-    - /api/search?q=topspin&faute_type=out
-    - /api/search?player=FAN-ZHENDONG (tous les matchs de ce joueur)
-    """
-    if not check_es_connection():
-        raise HTTPException(
-            status_code=503,
-            detail="Elasticsearch is not available. Make sure Docker is running."
-        )
-    
-    if not check_index_exists():
-        return {
-            "total": 0,
-            "page": page,
-            "size": size,
-            "pages": 0,
-            "points": [],
-            "message": "No data indexed yet. Run: python backend/scripts/index_to_elasticsearch.py"
-        }
-    
-    # Construire la requête
+def build_es_query(
+    match_id: Optional[str] = None,
+    player: Optional[str] = None,
+    winner: Optional[str] = None,
+    serveur: Optional[str] = None,
+    set_num: Optional[int] = None,
+    nb_coups_min: Optional[int] = None,
+    nb_coups_max: Optional[int] = None,
+    effet: Optional[str] = None,
+    lateralite: Optional[str] = None,
+    faute_type: Optional[str] = None,
+    winning_shot: Optional[str] = None,
+    winning_shot_status: Optional[str] = None,
+    zone: Optional[str] = None,
+    service_zone: Optional[str] = None,
+    service_lateralite: Optional[str] = None,
+    q: Optional[str] = None
+) -> dict:
+    """Helper to build the Elasticsearch query dict from filters."""
     must_clauses = []
     filter_clauses = []
     
@@ -183,8 +115,6 @@ async def search_points(
     if winning_shot_status == "winner":
         filter_clauses.append({"term": {"faute_type": "pt_gagne"}})
     elif winning_shot_status == "error":
-        # Doit être une faute (out ou filet) donc PAS pt_gagne.
-        # Note: pourrait aussi être explicitement ("out" OR "filet")
         must_clauses.append({
             "bool": {
                 "must_not": {"term": {"faute_type": "pt_gagne"}}
@@ -235,18 +165,88 @@ async def search_points(
     # Si aucun filtre, match all
     if not must_clauses and not filter_clauses:
         query = {"match_all": {}}
+        
+    return query
+
+
+@router.get("/status")
+async def get_search_status():
+    """
+    Check Elasticsearch connection status.
+    """
+    connected = check_es_connection()
     
-    # Exécuter la recherche
+    index_info = None
+    if connected:
+        try:
+            count_result = es_request("GET", f"/{ES_INDEX}/_count")
+            index_info = {"exists": True, "count": count_result.get("count", 0)}
+        except Exception:
+            index_info = {"exists": False, "count": 0}
+    
+    return {
+        "elasticsearch": {
+            "connected": connected,
+            "host": ES_HOST,
+            "index": ES_INDEX,
+            "index_info": index_info
+        }
+    }
+
+
+@router.get("")
+async def search_points(
+    match_id: Optional[str] = Query(None, description="ID du match"),
+    player: Optional[str] = Query(None, description="Nom du joueur (filtre sur player_A ou player_B)"),
+    winner: Optional[str] = Query(None, description="Gagnant du point"),
+    serveur: Optional[str] = Query(None, description="Serveur du point"),
+    set_num: Optional[int] = Query(None, description="Numéro du set"),
+    nb_coups_min: Optional[int] = Query(None, description="Nombre minimum de coups"),
+    nb_coups_max: Optional[int] = Query(None, description="Nombre maximum de coups"),
+    effet: Optional[str] = Query(None, description="Effet recherché (topspin, poussette, block, flip)"),
+    lateralite: Optional[str] = Query(None, description="Latéralité (coup_droit, revers)"),
+    faute_type: Optional[str] = Query(None, description="Type de faute (out, filet, pt_gagne)"),
+    winning_shot: Optional[str] = Query(None, description="Type de coup gagnant (dernier_coup)"),
+    winning_shot_status: Optional[str] = Query(None, description="Statut du dernier coup: 'winner' (point gagné), 'error' (faute), ou None"),
+    zone: Optional[str] = Query(None, description="Zone de jeu (m1, g2, d3, etc.)"),
+    service_zone: Optional[str] = Query(None, description="Zone de service"),
+    service_lateralite: Optional[str] = Query(None, description="Latéralité du service (coup_droit, revers)"),
+    q: Optional[str] = Query(None, description="Recherche textuelle dans les séquences"),
+    page: int = Query(1, ge=1, description="Numéro de page"),
+    size: int = Query(20, ge=1, le=100, description="Nombre de résultats par page")
+):
+    """
+    Recherche de points avec filtres multiples.
+    """
+    if not check_es_connection():
+        raise HTTPException(
+            status_code=503,
+            detail="Elasticsearch is not available. Make sure Docker is running."
+        )
+    
+    if not check_index_exists():
+        return {
+            "total": 0,
+            "page": page,
+            "size": size,
+            "pages": 0,
+            "points": [],
+            "message": "No data indexed yet. Run: python backend/scripts/index_to_elasticsearch.py"
+        }
+    
+    query = build_es_query(
+        match_id, player, winner, serveur, set_num, nb_coups_min, nb_coups_max,
+        effet, lateralite, faute_type, winning_shot, winning_shot_status,
+        zone, service_zone, service_lateralite, q
+    )
+    
     from_offset = (page - 1) * size
     
     search_body = {
         "query": query,
         "from": from_offset,
         "size": size,
-        "sort": [
-            {"match_id": "asc"},
-            {"point_id": "asc"}
-        ]
+        "sort": [{"match_id": "asc"}, {"point_id": "asc"}]
     }
     
     try:
@@ -254,7 +254,6 @@ async def search_points(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Elasticsearch error: {str(e)}")
     
-    # Formater les résultats
     hits = response.get("hits", {})
     total = hits.get("total", {}).get("value", 0)
     points = [{"id": hit["_id"], **hit["_source"]} for hit in hits.get("hits", [])]
@@ -269,10 +268,27 @@ async def search_points(
 
 
 @router.get("/stats")
-async def get_search_stats():
+async def get_search_stats(
+    match_id: Optional[str] = Query(None),
+    player: Optional[str] = Query(None),
+    winner: Optional[str] = Query(None),
+    serveur: Optional[str] = Query(None),
+    set_num: Optional[int] = Query(None),
+    nb_coups_min: Optional[int] = Query(None),
+    nb_coups_max: Optional[int] = Query(None),
+    effet: Optional[str] = Query(None),
+    lateralite: Optional[str] = Query(None),
+    faute_type: Optional[str] = Query(None),
+    winning_shot: Optional[str] = Query(None),
+    winning_shot_status: Optional[str] = Query(None),
+    zone: Optional[str] = Query(None),
+    service_zone: Optional[str] = Query(None),
+    service_lateralite: Optional[str] = Query(None),
+    q: Optional[str] = Query(None)
+):
     """
-    Retourne des statistiques globales pour alimenter les filtres de l'UI.
-    Utile pour construire des dropdowns dynamiques.
+    Retourne des statistiques globales FILTRÉES.
+    Les stats s'adaptent dynamiquement aux filtres appliqués.
     """
     if not check_es_connection():
         raise HTTPException(status_code=503, detail="Elasticsearch is not available")
@@ -280,8 +296,16 @@ async def get_search_stats():
     if not check_index_exists():
         return {"total_points": 0, "message": "No data indexed"}
     
+    # On construit la même requête que pour la recherche
+    query = build_es_query(
+        match_id, player, winner, serveur, set_num, nb_coups_min, nb_coups_max,
+        effet, lateralite, faute_type, winning_shot, winning_shot_status,
+        zone, service_zone, service_lateralite, q
+    )
+    
     aggs_body = {
         "size": 0,
+        "query": query,  # Applique les filtres aux aggrégations !
         "aggs": {
             "matches": {"terms": {"field": "match_id", "size": 100}},
             "players_A": {"terms": {"field": "player_A", "size": 50}},
@@ -305,7 +329,6 @@ async def get_search_stats():
     aggs = response.get("aggregations", {})
     total = response.get("hits", {}).get("total", {}).get("value", 0)
     
-    # Combiner players_A et players_B en une liste unique
     players = set()
     for bucket in aggs.get("players_A", {}).get("buckets", []):
         players.add(bucket["key"])

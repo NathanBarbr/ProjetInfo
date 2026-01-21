@@ -1,19 +1,120 @@
 @import "tailwindcss";
 
 :root {
-  --background: #141414;
-  --foreground: #ededed;
+  /* Common variables */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* Light Mode Defaults (can be scoped under .light if needed, but usually :root is light) */
+:root {
+  --background: #ffffff;
+  --foreground: #0f0f0f;
+
+  --card: #ffffff;
+  --card-foreground: #0f0f0f;
+
+  --popover: #ffffff;
+  --popover-foreground: #0f0f0f;
+
+  --primary: #9333ea;
+  /* Purple 600 */
+  --primary-foreground: #ffffff;
+
+  --secondary: #f4f4f5;
+  /* Zinc 100 */
+  --secondary-foreground: #18181b;
+  /* Zinc 900 */
+
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  /* Zinc 500 */
+
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #e4e4e7;
+  /* Zinc 200 */
+  --input: #e4e4e7;
+  --ring: #9333ea;
+}
+
+/* Dark Mode Overrides */
+.dark {
+  --background: #202020;
+  /* Lighter grey request */
+  --foreground: #ededed;
+
+  --card: #27272a;
+  /* Zinc 800 */
+  --card-foreground: #ededed;
+
+  --popover: #27272a;
+  --popover-foreground: #ededed;
+
+  --primary: #a855f7;
+  /* Purple 500 */
+  --primary-foreground: #ffffff;
+
+  --secondary: #27272a;
+  /* Zinc 800 */
+  --secondary-foreground: #ededed;
+
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  /* Zinc 400 */
+
+  --accent: #27272a;
+  --accent-foreground: #ededed;
+
+  --destructive: #7f1d1d;
+  --destructive-foreground: #ededed;
+
+  --border: #27272a;
+  /* Zinc 800 - Subtle border as requested */
+  --input: #27272a;
+  --ring: #a855f7;
+}
+
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }

@@ -18,18 +18,22 @@ export const metadata: Metadata = {
   description: "Analysez des matchs de ping-pong avec IA",
 };
 
+import { ThemeProvider } from "@/context/ThemeContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
-        <ChatWidget />
+        <ThemeProvider>
+          {children}
+          <ChatWidget />
+        </ThemeProvider>
       </body>
     </html>
   );
