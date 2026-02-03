@@ -1,9 +1,29 @@
+/* Google Fonts - Modern Luxury Editorial + YouTube Typography */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=Roboto:wght@400;500;700&display=swap');
+
 @import "tailwindcss";
 
 :root {
-  /* Common variables */
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Typography - Hybrid System */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+
+  /* Modern Luxury Editorial Palette */
+  --lux-anthracite: #1c1c1e;
+  --lux-surface: #2c2c2e;
+  --lux-border: #3a3a3c;
+  --lux-accent: #0a84ff;
+  --lux-text-primary: #f5f5f7;
+  --lux-text-secondary: #86868b;
+
+  /* Glassmorphism */
+  --glass-blur: 15px;
+  --glass-opacity: 0.8;
+
+  /* Consistent Border Radius */
+  --radius-standard: 16px;
+  --radius-small: 8px;
 }
 
 @theme inline {
@@ -35,86 +55,122 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'SF Mono', monospace;
 }
 
-/* Light Mode Defaults (can be scoped under .light if needed, but usually :root is light) */
+/* Light Mode - Editorial Clean */
 :root {
-  --background: #ffffff;
-  --foreground: #0f0f0f;
+  --background: #f5f5f7;
+  --foreground: #1c1c1e;
 
   --card: #ffffff;
-  --card-foreground: #0f0f0f;
+  --card-foreground: #1c1c1e;
 
   --popover: #ffffff;
-  --popover-foreground: #0f0f0f;
+  --popover-foreground: #1c1c1e;
 
-  --primary: #9333ea;
-  /* Purple 600 */
+  --primary: #0a84ff;
   --primary-foreground: #ffffff;
 
-  --secondary: #f4f4f5;
-  /* Zinc 100 */
-  --secondary-foreground: #18181b;
-  /* Zinc 900 */
+  --secondary: #e5e5e7;
+  --secondary-foreground: #1c1c1e;
 
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  /* Zinc 500 */
+  --muted: #e5e5e7;
+  --muted-foreground: #86868b;
 
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
+  --accent: #e5e5e7;
+  --accent-foreground: #1c1c1e;
 
-  --destructive: #ef4444;
+  --destructive: #ff453a;
   --destructive-foreground: #ffffff;
 
-  --border: #e4e4e7;
-  /* Zinc 200 */
-  --input: #e4e4e7;
-  --ring: #9333ea;
+  --border: #d1d1d6;
+  --input: #e5e5e7;
+  --ring: #0a84ff;
 }
 
-/* Dark Mode Overrides */
+/* Dark Mode - Modern Luxury Editorial (Primary) */
 .dark {
-  --background: #202020;
-  /* Lighter grey request */
-  --foreground: #ededed;
+  --background: #1c1c1e;
+  --foreground: #f5f5f7;
 
-  --card: #27272a;
-  /* Zinc 800 */
-  --card-foreground: #ededed;
+  --card: #2c2c2e;
+  --card-foreground: #f5f5f7;
 
-  --popover: #27272a;
-  --popover-foreground: #ededed;
+  --popover: #2c2c2e;
+  --popover-foreground: #f5f5f7;
 
-  --primary: #a855f7;
-  /* Purple 500 */
+  --primary: #0a84ff;
   --primary-foreground: #ffffff;
 
-  --secondary: #27272a;
-  /* Zinc 800 */
-  --secondary-foreground: #ededed;
+  --secondary: #2c2c2e;
+  --secondary-foreground: #f5f5f7;
 
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  /* Zinc 400 */
+  --muted: #2c2c2e;
+  --muted-foreground: #86868b;
 
-  --accent: #27272a;
-  --accent-foreground: #ededed;
+  --accent: #2c2c2e;
+  --accent-foreground: #f5f5f7;
 
-  --destructive: #7f1d1d;
-  --destructive-foreground: #ededed;
+  --destructive: #ff453a;
+  --destructive-foreground: #f5f5f7;
 
-  --border: #27272a;
-  /* Zinc 800 - Subtle border as requested */
-  --input: #27272a;
-  --ring: #a855f7;
+  --border: #3a3a3c;
+  --input: #3a3a3c;
+  --ring: #0a84ff;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: var(--font-sans);
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glass Effect Utility */
+.glass {
+  background: rgba(44, 44, 46, var(--glass-opacity));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* Display Typography (Playfair Display) */
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Text Hierarchy */
+.text-editorial-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--lux-text-primary);
+}
+
+.text-editorial-body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--lux-text-secondary);
+}
+
+/* Thin Stroke Icons - Override for thin aesthetic */
+.icon-thin {
+  stroke-width: 1.25;
+}
+
+/* Focus States - Electric Blue */
+:focus-visible {
+  outline: 2px solid var(--lux-accent);
+  outline-offset: 2px;
+}
+
+/* Selection Color */
+::selection {
+  background: rgba(10, 132, 255, 0.3);
+  color: var(--lux-text-primary);
 }

@@ -1,0 +1,280 @@
+"""
+Semantic Search Router - Vector-based search using embeddings.
+Provides highlights mode and similar recommendations.
+"""
+
+import os
+import numpy as np
+from typing import Optional, List
+from fastapi import APIRouter, HTTPException, Query
+
+# Import the indexer
+import sys
+from pathlib import Path
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    from embeddings.indexer import ElasticSearchIndexer
+    HAS_INDEXER = True
+except ImportError:
+    HAS_INDEXER = False
+    print("[WARNING] Could not import ElasticSearchIndexer")
+
+router = APIRouter(prefix="/api/semantic", tags=["semantic-search"])
+
+# Singleton indexer instance (lazy initialization)
+_indexer: Optional[ElasticSearchIndexer] = None
+
+
+def get_indexer() -> ElasticSearchIndexer:
+    """Get or create the ElasticSearchIndexer singleton."""
+    global _indexer
+    if _indexer is None:
+        if not HAS_INDEXER:
+            raise HTTPException(
+                status_code=500,
+                detail="ElasticSearchIndexer not available"
+            )
+        _indexer = ElasticSearchIndexer(
+            host=os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
+        )
+        _indexer.connect()
+    return _indexer
+
+
+@router.get("/status")
+async def get_semantic_status():
+    """
+    Check semantic search status (embeddings index).
+    """
+    try:
+        indexer = get_indexer()
+        stats = indexer.get_stats()
+        return {
+            "available": True,
+            "index": indexer.INDEX_NAME,
+            "stats": stats
+        }
+    except Exception as e:
+        return {
+            "available": False,
+            "error": str(e)
+        }
+
+
+def is_set_point(score_a: int, score_b: int, winner: str, player_a: str) -> bool:
+    """
+    Détecte si ce point est un point de fin de set.
+    
+    En tennis de table, un set se termine à 11 points avec au moins 2 points d'écart.
+    
+    Args:
+        score_a: Score du joueur A APRÈS le point
+        score_b: Score du joueur B APRÈS le point
+        winner: Gagnant du point
+        player_a: Nom du joueur A
+        
+    Returns:
+        True si c'est un point de fin de set
+    """
+    # Le gagnant a marqué, donc son score après ce point doit être vérifié
+    if winner == player_a:
+        # Player A a gagné ce point, donc score_a est son score actuel
+        return score_a >= 11 and (score_a - score_b) >= 2
+    else:
+        # Player B a gagné ce point
+        return score_b >= 11 and (score_b - score_a) >= 2
+
+
+def enrich_point_data(point: dict) -> dict:
+    """
+    Enrichit les données d'un point avec des informations supplémentaires.
+    
+    - is_set_point: True si c'est un point de fin de set
+    - is_point_gagnant: True si c'est un coup gagnant (pas une faute adverse)
+    """
+    # Détection de fin de set
+    score_a = point.get("score_A", 0) or 0
+    score_b = point.get("score_B", 0) or 0
+    winner = point.get("winner", "")
+    player_a = point.get("player_A", "")
+    
+    point["is_set_point"] = is_set_point(score_a, score_b, winner, player_a)
+    
+    # Détection de point gagnant (coup gagnant, pas faute adverse)
+    point["is_point_gagnant"] = point.get("faute_type") == "pt_gagne"
+    
+    return point
+
+
+@router.get("/highlights")
+async def search_highlights(
+    k: int = Query(20, ge=1, le=100, description="Number of results"),
+    match_id: Optional[str] = Query(None, description="Filter by match"),
+    winner: Optional[str] = Query(None, description="Filter by winner"),
+    serveur: Optional[str] = Query(None, description="Filter by server"),
+    set_num: Optional[int] = Query(None, description="Filter by set number")
+):
+    """
+    Search points sorted by similarity to "beautiful points" (highlights).
+    
+    Highlights are defined as:
+    - Points gagnants (faute_type = pt_gagne) - winning shots, not opponent errors
+    - Long rallies (nb_coups >= 5)
+    
+    Returns points most similar to this profile, with set-ending detection.
+    """
+    try:
+        indexer = get_indexer()
+        
+        # Build filters dict
+        filters = {}
+        if match_id:
+            filters["match_id"] = match_id
+        if winner:
+            filters["winner"] = winner
+        if serveur:
+            filters["serveur"] = serveur
+        if set_num:
+            filters["set_num"] = set_num
+        
+        # Search by highlight similarity
+        results = indexer.search_by_highlight_similarity(
+            k=k,
+            filters=filters if filters else None
+        )
+        
+        # Format and enrich results
+        points = []
+        for r in results:
+            point = {
+                "id": r.get("_id"),
+                "similarity_score": r.get("_score"),
+                **{k: v for k, v in r.items() if not k.startswith("_")}
+            }
+            # Enrich with additional computed fields
+            point = enrich_point_data(point)
+            points.append(point)
+        
+        return {
+            "total": len(points),
+            "mode": "highlights",
+            "points": points
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Semantic search error: {str(e)}")
+
+
+@router.get("/similar")
+async def search_similar(
+    reference_ids: str = Query(..., description="Comma-separated list of reference document IDs"),
+    exclude_ids: Optional[str] = Query(None, description="Comma-separated list of IDs to exclude"),
+    k: int = Query(6, ge=1, le=20, description="Number of recommendations")
+):
+    """
+    Find points similar to the reference points, excluding specified IDs.
+    
+    Used for "You might also like..." recommendations after filtering.
+    
+    Args:
+        reference_ids: IDs of points to use as reference for similarity
+        exclude_ids: IDs to exclude from results (e.g., already shown points)
+        k: Number of recommendations to return
+    """
+    try:
+        indexer = get_indexer()
+        
+        # Parse IDs
+        ref_ids = [id.strip() for id in reference_ids.split(",") if id.strip()]
+        excl_ids = []
+        if exclude_ids:
+            excl_ids = [id.strip() for id in exclude_ids.split(",") if id.strip()]
+        
+        if not ref_ids:
+            raise HTTPException(status_code=400, detail="No reference IDs provided")
+        
+        # Get embeddings for reference documents
+        embeddings = indexer.get_documents_embeddings(ref_ids)
+        
+        if not embeddings:
+            raise HTTPException(status_code=404, detail="No embeddings found for reference IDs")
+        
+        # Calculate average embedding
+        avg_embedding = np.mean(embeddings, axis=0)
+        
+        # Search for similar, excluding specified IDs
+        results = indexer.search_similar_excluding(
+            query_embedding=avg_embedding,
+            exclude_ids=excl_ids,
+            k=k
+        )
+        
+        # Format results
+        recommendations = []
+        for r in results:
+            point = {
+                "id": r.get("_id"),
+                "similarity_score": r.get("_score"),
+                **{k: v for k, v in r.items() if not k.startswith("_")}
+            }
+            recommendations.append(point)
+        
+        return {
+            "total": len(recommendations),
+            "reference_count": len(ref_ids),
+            "recommendations": recommendations
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Similar search error: {str(e)}")
+
+
+@router.get("/point/{doc_id}/similar")
+async def get_point_similar(
+    doc_id: str,
+    k: int = Query(6, ge=1, le=20, description="Number of similar points")
+):
+    """
+    Find points similar to a specific point.
+    
+    Useful for "More like this" functionality.
+    """
+    try:
+        indexer = get_indexer()
+        
+        # Get embedding for the document
+        embeddings = indexer.get_documents_embeddings([doc_id])
+        
+        if not embeddings:
+            raise HTTPException(status_code=404, detail=f"Document not found: {doc_id}")
+        
+        # Search for similar, excluding the original
+        results = indexer.search_similar_excluding(
+            query_embedding=embeddings[0],
+            exclude_ids=[doc_id],
+            k=k
+        )
+        
+        # Format results
+        similar_points = []
+        for r in results:
+            point = {
+                "id": r.get("_id"),
+                "similarity_score": r.get("_score"),
+                **{k: v for k, v in r.items() if not k.startswith("_")}
+            }
+            similar_points.append(point)
+        
+        return {
+            "reference_id": doc_id,
+            "similar": similar_points
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error finding similar points: {str(e)}")

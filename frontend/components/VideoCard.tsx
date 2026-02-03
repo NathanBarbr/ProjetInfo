@@ -8,55 +8,94 @@ interface VideoCardProps {
 
 /**
  * VideoCard component - Displays a video thumbnail with hover effects
+ * Modern Luxury Editorial / YouTube seamless style
  */
 export default function VideoCard({ id, title, description }: VideoCardProps) {
     return (
         <Link href={`/watch/${id}`} className="group block">
-            <div className="relative rounded-xl overflow-hidden bg-card border border-border transition-all duration-300 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10 hover:scale-[1.02]">
-                {/* Thumbnail */}
-                <div className="aspect-video bg-muted relative overflow-hidden">
-                    <img
-                        src={`http://localhost:8000/api/videos/${id}/thumbnail`}
-                        alt={title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                        }}
-                    />
+            {/* Thumbnail - Seamless, no border */}
+            <div
+                className="aspect-video relative overflow-hidden"
+                style={{ borderRadius: '12px' }}
+            >
+                <img
+                    src={`http://localhost:8000/api/videos/${id}/thumbnail`}
+                    alt={title}
+                    className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
+                    style={{ opacity: 0.9 }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.9'}
+                    onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                    }}
+                />
 
-                    {/* Fallback pattern (visible if img hidden) */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-muted to-card flex items-center justify-center -z-10">
+                {/* Fallback pattern (visible if img hidden) */}
+                <div
+                    className="absolute inset-0 flex items-center justify-center -z-10"
+                    style={{
+                        background: 'linear-gradient(135deg, #2c2c2e 0%, #1c1c1e 100%)',
+                    }}
+                >
+                    <svg
+                        className="w-12 h-12 transition-colors duration-300"
+                        fill="none"
+                        stroke="#86868b"
+                        strokeWidth="1.25"
+                        viewBox="0 0 24 24"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
+                    </svg>
+                </div>
+
+                {/* Hover overlay with play button */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div
+                        className="p-4"
+                        style={{
+                            background: 'rgba(10, 132, 255, 0.9)',
+                            borderRadius: '50%',
+                        }}
+                    >
                         <svg
-                            className="w-16 h-16 text-muted-foreground group-hover:text-primary/50 transition-colors duration-300"
-                            fill="currentColor"
+                            className="w-7 h-7"
+                            fill="none"
+                            stroke="#fff"
+                            strokeWidth="1.5"
                             viewBox="0 0 24 24"
                         >
-                            <path d="M8 5v14l11-7z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
                         </svg>
                     </div>
-
-                    {/* Hover overlay with play button */}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                        <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                            <svg className="w-7 h-7 text-zinc-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M8 5v14l11-7z" />
-                            </svg>
-                        </div>
-                    </div>
                 </div>
+            </div>
 
-                {/* Video info */}
-                <div className="p-4">
-                    <h3 className="text-foreground font-medium text-sm truncate group-hover:text-primary transition-colors">
-                        {title}
-                    </h3>
-                    {description && (
-                        <p className="text-muted-foreground text-xs mt-1 line-clamp-2">
-                            {description}
-                        </p>
-                    )}
-                </div>
+            {/* Video info - YouTube style with Roboto */}
+            <div className="pt-3 pb-6 px-0">
+                <h3
+                    className="text-sm font-medium line-clamp-2 leading-snug"
+                    style={{
+                        fontFamily: "'Roboto', Arial, sans-serif",
+                        color: '#f5f5f7',
+                        fontWeight: 500,
+                    }}
+                >
+                    {title}
+                </h3>
+                {description && (
+                    <p
+                        className="text-xs mt-1 line-clamp-2"
+                        style={{
+                            fontFamily: "'Roboto', Arial, sans-serif",
+                            color: '#aaaaaa',
+                            fontWeight: 400,
+                        }}
+                    >
+                        {description}
+                    </p>
+                )}
             </div>
         </Link>
     );
 }
+

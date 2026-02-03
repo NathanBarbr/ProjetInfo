@@ -97,42 +97,90 @@ export default function WatchPage() {
         return meta?.title || "Loading...";
     };
 
-    // ... (existing imports)
-
     return (
-        <div className="min-h-screen bg-background text-foreground">
-            {/* Header with back button */}
-            <header className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b border-border">
+        <div
+            className="min-h-screen"
+            style={{
+                background: '#1c1c1e',
+                color: '#f5f5f7',
+            }}
+        >
+            {/* Header - Glassmorphism with fine border */}
+            <header
+                className="sticky top-0 z-50"
+                style={{
+                    background: 'rgba(44, 44, 46, 0.8)',
+                    backdropFilter: 'blur(15px)',
+                    WebkitBackdropFilter: 'blur(15px)',
+                    borderBottom: '1px solid #3a3a3c',
+                }}
+            >
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                         <Link
                             href={backUrl ? decodeURIComponent(backUrl) : "/"}
-                            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                            className="flex items-center gap-2 transition-colors flex-shrink-0"
+                            style={{ color: '#86868b' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = '#86868b'}
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.25"
+                                viewBox="0 0 24 24"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                             </svg>
-                            <span className="text-sm">{backUrl ? "Back to Search" : "Back"}</span>
+                            <span
+                                className="text-sm"
+                                style={{ fontFamily: "'Inter', sans-serif" }}
+                            >
+                                {backUrl ? "Back to Search" : "Back"}
+                            </span>
                         </Link>
-                        <div className="h-4 w-px bg-border flex-shrink-0" />
+                        <div
+                            className="h-4 w-px flex-shrink-0"
+                            style={{ background: '#3a3a3c' }}
+                        />
 
                         {/* Breadcrumb: Match title > Clip */}
-                        <div className="flex items-center gap-2 text-sm overflow-hidden text-foreground">
+                        <div
+                            className="flex items-center gap-2 text-sm overflow-hidden"
+                            style={{ fontFamily: "'Inter', sans-serif" }}
+                        >
                             {currentClip ? (
                                 <>
                                     <button
                                         onClick={() => setCurrentClip(null)}
-                                        className="text-muted-foreground hover:text-foreground truncate transition-colors"
+                                        className="truncate transition-colors"
+                                        style={{ color: '#86868b' }}
+                                        onMouseEnter={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                                        onMouseLeave={(e) => e.currentTarget.style.color = '#86868b'}
                                     >
                                         {meta?.title || "Match"}
                                     </button>
-                                    <span className="text-muted-foreground">/</span>
-                                    <span className="font-medium truncate">
+                                    <span style={{ color: '#3a3a3c' }}>/</span>
+                                    <span
+                                        className="font-medium truncate"
+                                        style={{
+                                            fontFamily: "'Playfair Display', Georgia, serif",
+                                            color: '#f5f5f7',
+                                        }}
+                                    >
                                         {getCurrentTitle()}
                                     </span>
                                 </>
                             ) : (
-                                <h1 className="text-lg font-medium truncate">
+                                <h1
+                                    className="text-lg font-medium truncate"
+                                    style={{
+                                        fontFamily: "'Playfair Display', Georgia, serif",
+                                        color: '#f5f5f7',
+                                        letterSpacing: '-0.02em',
+                                    }}
+                                >
                                     {meta?.title || "Loading..."}
                                 </h1>
                             )}
@@ -144,20 +192,47 @@ export default function WatchPage() {
             </header>
 
             {/* Main content */}
-            <main className="pt-8 pb-16 px-6">
+            <main className="pt-10 pb-20 px-6">
                 <div className="max-w-7xl mx-auto">
                     {/* Error state */}
                     {error && (
                         <div className="text-center py-20">
-                            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-secondary flex items-center justify-center">
-                                <svg className="w-10 h-10 text-muted-foreground" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+                            <div
+                                className="w-20 h-20 mx-auto mb-4 flex items-center justify-center"
+                                style={{
+                                    borderRadius: '16px',
+                                    background: 'rgba(44, 44, 46, 0.8)',
+                                    border: '1px solid #3a3a3c',
+                                }}
+                            >
+                                <svg
+                                    className="w-10 h-10"
+                                    fill="none"
+                                    stroke="#86868b"
+                                    strokeWidth="1.25"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                                 </svg>
                             </div>
-                            <p className="text-muted-foreground text-lg">Video not found</p>
+                            <p
+                                className="text-lg"
+                                style={{
+                                    fontFamily: "'Playfair Display', Georgia, serif",
+                                    color: '#86868b',
+                                }}
+                            >
+                                Video not found
+                            </p>
                             <Link
                                 href="/"
-                                className="mt-4 inline-block text-primary hover:text-primary/80 text-sm"
+                                className="mt-4 inline-block text-sm transition-colors"
+                                style={{
+                                    fontFamily: "'Inter', sans-serif",
+                                    color: '#0a84ff',
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                             >
                                 ← Return to gallery
                             </Link>
@@ -166,7 +241,7 @@ export default function WatchPage() {
 
                     {/* Video player + Sidebar layout */}
                     {!error && (
-                        <div className="flex flex-col lg:flex-row gap-6">
+                        <div className="flex flex-col lg:flex-row gap-8">
                             {/* Video player - takes remaining space */}
                             <div className="flex-1 min-w-0">
                                 <VideoPlayer
@@ -194,3 +269,4 @@ export default function WatchPage() {
         </div>
     );
 }
+

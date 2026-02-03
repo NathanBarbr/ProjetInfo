@@ -22,6 +22,9 @@ interface SearchResult {
     description?: string;
     score_A?: number;
     score_B?: number;
+    is_set_point?: boolean;
+    is_point_gagnant?: boolean;
+    similarity_score?: number;
     [key: string]: any;
 }
 
@@ -32,6 +35,11 @@ interface SearchResponse {
     size: number;
     pages: number;
     message?: string;
+}
+
+interface RecommendationResponse {
+    total: number;
+    recommendations: SearchResult[];
 }
 
 interface SearchStats {
@@ -63,6 +71,12 @@ function SearchContent() {
     const [message, setMessage] = useState<string | null>(null);
     const [stats, setStats] = useState<SearchStats | null>(null);
 
+    // Semantic search state
+    const [sortMode, setSortMode] = useState<"chronological" | "highlights">("chronological");
+    const [semanticAvailable, setSemanticAvailable] = useState(false);
+    const [recommendations, setRecommendations] = useState<SearchResult[]>([]);
+    const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+
     // Filters state
     const [filters, setFilters] = useState({
         match_id: searchParams.get("match_id") || "",
@@ -80,7 +94,7 @@ function SearchContent() {
     // Current page from URL
     const currentPage = Number(searchParams.get("page")) || 1;
 
-    // Check ES status
+    // Check ES status and semantic search availability
     useEffect(() => {
         fetch(`${API_URL}/api/search/status`)
             .then((res) => res.json())
@@ -89,7 +103,43 @@ function SearchContent() {
                 setEsStatus(connected ? "connected" : "disconnected");
             })
             .catch(() => setEsStatus("disconnected"));
+
+        // Check semantic search availability
+        fetch(`${API_URL}/api/semantic/status`)
+            .then((res) => res.json())
+            .then((data) => {
+                setSemanticAvailable(data.available === true);
+            })
+            .catch(() => setSemanticAvailable(false));
     }, []);
+
+    // Fetch recommendations based on current results
+    const fetchRecommendations = useCallback(async (resultIds: string[]) => {
+        if (!semanticAvailable || resultIds.length === 0) {
+            setRecommendations([]);
+            return;
+        }
+
+        setLoadingRecommendations(true);
+        try {
+            // Use first 5 results as reference
+            const refIds = resultIds.slice(0, 5).join(",");
+            const excludeIds = resultIds.join(",");
+
+            const res = await fetch(
+                `${API_URL}/api/semantic/similar?reference_ids=${refIds}&exclude_ids=${excludeIds}&k=6`
+            );
+
+            if (res.ok) {
+                const data: RecommendationResponse = await res.json();
+                setRecommendations(data.recommendations || []);
+            }
+        } catch (error) {
+            console.warn("Failed to fetch recommendations", error);
+        } finally {
+            setLoadingRecommendations(false);
+        }
+    }, [semanticAvailable]);
 
     // Perform Search AND Stats based on URL params
     const performSearchAndStats = useCallback(async () => {
@@ -97,6 +147,7 @@ function SearchContent() {
 
         setLoading(true);
         setMessage(null);
+        setRecommendations([]);
 
         // Build params from URL (source of truth)
         const params = new URLSearchParams(searchParams.toString());
@@ -104,14 +155,39 @@ function SearchContent() {
         if (!params.has("size")) params.set("size", "20");
 
         try {
-            // 1. Fetch search results
-            const searchRes = await fetch(`${API_URL}/api/search?${params.toString()}`);
-            if (!searchRes.ok) {
-                const errorText = await searchRes.text();
-                throw new Error(`Search API error (${searchRes.status}): ${errorText}`);
-            }
+            let searchData: SearchResponse;
 
-            const searchData: SearchResponse = await searchRes.json();
+            // Use semantic highlights endpoint if sortMode is highlights
+            if (sortMode === "highlights" && semanticAvailable) {
+                const highlightParams = new URLSearchParams();
+                highlightParams.set("k", params.get("size") || "20");
+                if (params.get("match_id")) highlightParams.set("match_id", params.get("match_id")!);
+                if (params.get("winner")) highlightParams.set("winner", params.get("winner")!);
+                if (params.get("serveur")) highlightParams.set("serveur", params.get("serveur")!);
+                if (params.get("set_num")) highlightParams.set("set_num", params.get("set_num")!);
+
+                const highlightRes = await fetch(`${API_URL}/api/semantic/highlights?${highlightParams.toString()}`);
+                if (highlightRes.ok) {
+                    const highlightData = await highlightRes.json();
+                    searchData = {
+                        points: highlightData.points || [],
+                        total: highlightData.total || 0,
+                        page: 1,
+                        size: 20,
+                        pages: 1
+                    };
+                } else {
+                    throw new Error("Highlights API error");
+                }
+            } else {
+                // Standard search
+                const searchRes = await fetch(`${API_URL}/api/search?${params.toString()}`);
+                if (!searchRes.ok) {
+                    const errorText = await searchRes.text();
+                    throw new Error(`Search API error (${searchRes.status}): ${errorText}`);
+                }
+                searchData = await searchRes.json();
+            }
 
             if (!searchData) {
                 throw new Error("Search API returned null data");
@@ -122,8 +198,31 @@ function SearchContent() {
             setPages(searchData.pages || 0);
             if (searchData.message) setMessage(searchData.message);
 
+            // Fetch recommendations
+            const hasFilters = Array.from(params.entries()).some(([key, val]) =>
+                !["page", "size"].includes(key) && val
+            );
+
+            if (hasFilters && searchData.points?.length > 0) {
+                // Normal case: recommend similar to current results
+                fetchRecommendations(searchData.points.map(p => p.id));
+            } else if (hasFilters && searchData.points?.length === 0 && semanticAvailable) {
+                // No results case: show highlights as suggestions
+                setLoadingRecommendations(true);
+                try {
+                    const highlightRes = await fetch(`${API_URL}/api/semantic/highlights?k=6`);
+                    if (highlightRes.ok) {
+                        const highlightData = await highlightRes.json();
+                        setRecommendations(highlightData.points || []);
+                    }
+                } catch (error) {
+                    console.warn("Failed to fetch highlight suggestions", error);
+                } finally {
+                    setLoadingRecommendations(false);
+                }
+            }
+
             // 2. Fetch Stats with SAME params (for contextual filtering)
-            // Remove pagination params for stats (we want stats on the full result set)
             const statsParams = new URLSearchParams(params.toString());
             statsParams.delete("page");
             statsParams.delete("size");
@@ -138,13 +237,12 @@ function SearchContent() {
 
         } catch (error: any) {
             setMessage(`Error: ${error.message || "Unknown error"}`);
-            // console.error(error); // Optional: keep clean
         } finally {
             setLoading(false);
         }
-    }, [searchParams, esStatus]);
+    }, [searchParams, esStatus, sortMode, semanticAvailable, fetchRecommendations]);
 
-    // Effect to run search when URL params change
+    // Effect to run search when URL params or sort mode change
     useEffect(() => {
         performSearchAndStats();
     }, [performSearchAndStats]);
@@ -351,6 +449,40 @@ function SearchContent() {
                         className="px-3 py-2 bg-card border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
                     />
                 </div>
+
+                {/* Sort Mode Selector */}
+                {semanticAvailable && (
+                    <div className="flex items-center gap-4 mt-4">
+                        <span className="text-sm text-muted-foreground">Tri:</span>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSortMode("chronological")}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sortMode === "chronological"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-card border border-input text-muted-foreground hover:text-foreground"
+                                    }`}
+                            >
+                                Chronologique
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSortMode("highlights")}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sortMode === "highlights"
+                                    ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+                                    : "bg-card border border-input text-muted-foreground hover:text-foreground"
+                                    }`}
+                            >
+                                Highlights
+                            </button>
+                        </div>
+                        {sortMode === "highlights" && (
+                            <span className="text-xs text-amber-500">
+                                Points gagnants avec longs échanges
+                            </span>
+                        )}
+                    </div>
+                )}
             </form>
 
             {/* ES Offline Warning */}
@@ -380,7 +512,7 @@ function SearchContent() {
             )}
 
             {/* Results Grid - Using grid for better visualization with thumbnails */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-8">
                 {results.map((result) => {
                     const videoSlug = getSlug(result.match_id);
                     const clipId = getClipId(result);
@@ -390,61 +522,166 @@ function SearchContent() {
                         <Link
                             key={result.id}
                             href={`/watch/${videoSlug}?clip=${clipId}&backUrl=${backUrl}`}
-                            className="group block bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 hover:shadow-lg transition-all"
+                            className="group block"
                         >
-                            {/* Thumbnail */}
-                            <div className="aspect-video bg-muted relative">
-                                <div className="absolute top-2 left-2 z-10 bg-black/60 px-2 py-0.5 rounded text-xs font-mono text-white">
+                            {/* Thumbnail - Seamless, no border */}
+                            <div
+                                className="aspect-video relative overflow-hidden"
+                                style={{ borderRadius: '12px' }}
+                            >
+                                <div
+                                    className="absolute top-2 left-2 z-10 px-2 py-0.5 text-xs font-mono"
+                                    style={{
+                                        background: 'rgba(28, 28, 30, 0.8)',
+                                        backdropFilter: 'blur(8px)',
+                                        WebkitBackdropFilter: 'blur(8px)',
+                                        borderRadius: '6px',
+                                        color: '#f5f5f7',
+                                        fontFamily: "'Playfair Display', Georgia, serif",
+                                    }}
+                                >
                                     Set {result.set_num} | Pt {result.point_id}
                                 </div>
+
+                                {/* Badges for special points */}
+                                <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
+                                    {result.is_set_point && (
+                                        <span
+                                            className="px-2 py-0.5 text-xs font-bold"
+                                            style={{
+                                                background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                                                borderRadius: '6px',
+                                                color: '#fff',
+                                            }}
+                                        >
+                                            FIN DE SET
+                                        </span>
+                                    )}
+                                    {result.is_point_gagnant && (
+                                        <span
+                                            className="px-2 py-0.5 text-xs font-medium"
+                                            style={{
+                                                background: 'rgba(34, 197, 94, 0.9)',
+                                                borderRadius: '6px',
+                                                color: '#fff',
+                                            }}
+                                        >
+                                            Point gagnant
+                                        </span>
+                                    )}
+                                    {sortMode === "highlights" && result.similarity_score && (
+                                        <span
+                                            className="px-2 py-0.5 text-xs font-mono"
+                                            style={{
+                                                background: 'rgba(168, 85, 247, 0.8)',
+                                                borderRadius: '6px',
+                                                color: '#fff',
+                                            }}
+                                        >
+                                            {(result.similarity_score * 100).toFixed(0)}% match
+                                        </span>
+                                    )}
+                                </div>
+
                                 <img
                                     src={`${API_URL}/api/videos/${videoSlug}/clips/${clipId}/thumbnail`}
                                     alt={`Point ${result.point_id}`}
-                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                    className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
+                                    style={{ opacity: 0.9 }}
+                                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.9'}
                                     onError={(e) => e.currentTarget.style.display = 'none'}
                                 />
-                                {/* Play icon overlay */}
-                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="bg-primary/90 rounded-full p-3">
-                                        <svg className="w-6 h-6 text-primary-foreground" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M8 5v14l11-7z" />
+                                {/* Play icon overlay - Glassmorphism */}
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <div
+                                        className="p-4"
+                                        style={{
+                                            background: 'rgba(10, 132, 255, 0.9)',
+                                            borderRadius: '50%',
+                                        }}
+                                    >
+                                        <svg
+                                            className="w-6 h-6"
+                                            fill="none"
+                                            stroke="#fff"
+                                            strokeWidth="1.5"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
                                         </svg>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Info */}
-                            <div className="p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className={`text-xs font-bold px-2 py-1 rounded ${result.winner === 'FAN-ZHENDONG' ? 'bg-blue-500/10 text-blue-500 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-red-500/10 text-red-500 dark:bg-red-900/40 dark:text-red-300'
-                                        }`}>
+                            {/* Info - YouTube style with Roboto */}
+                            <div className="pt-3 pb-4 px-0">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span
+                                        className="text-xs font-medium"
+                                        style={{
+                                            fontFamily: "'Roboto', Arial, sans-serif",
+                                            color: '#f5f5f7',
+                                        }}
+                                    >
                                         {result.winner}
                                     </span>
-                                    <span className="text-muted-foreground text-xs text-right">
+                                    <span
+                                        className="text-xs"
+                                        style={{
+                                            fontFamily: "'Roboto', Arial, sans-serif",
+                                            color: '#aaaaaa',
+                                        }}
+                                    >
                                         {result.nb_coups} shots
                                     </span>
                                 </div>
 
-                                <div className="text-sm text-foreground mb-1">
-                                    <span className="text-muted-foreground">Service:</span> {result.serveur}
+                                <div
+                                    className="text-sm mb-1"
+                                    style={{
+                                        fontFamily: "'Roboto', Arial, sans-serif",
+                                        color: '#f5f5f7',
+                                    }}
+                                >
+                                    <span style={{ color: '#aaaaaa' }}>Service:</span> <span style={{ fontWeight: 500 }}>{result.serveur}</span>
                                 </div>
 
                                 {result.faute_type && (
-                                    <div className="text-xs text-muted-foreground">
+                                    <div
+                                        className="text-xs"
+                                        style={{
+                                            fontFamily: "'Roboto', Arial, sans-serif",
+                                            color: '#aaaaaa',
+                                        }}
+                                    >
                                         {result.faute_type === 'pt_gagne' ? 'Winning point' : `Fault: ${result.faute_type}`}
                                     </div>
                                 )}
 
                                 {/* Display last shot if interesting */}
                                 {result.dernier_coup && (
-                                    <div className="text-xs text-muted-foreground mt-1">
+                                    <div
+                                        className="text-xs mt-1"
+                                        style={{
+                                            fontFamily: "'Roboto', Arial, sans-serif",
+                                            color: '#aaaaaa',
+                                        }}
+                                    >
                                         Last shot: {result.dernier_coup}
                                     </div>
                                 )}
 
                                 {/* Score display if available */}
                                 {(result.score_A !== undefined && result.score_B !== undefined) && (
-                                    <div className="mt-2 text-xs font-mono text-muted-foreground border-t border-border pt-2 flex justify-between">
+                                    <div
+                                        className="mt-2 text-xs pt-2 flex justify-between"
+                                        style={{
+                                            fontFamily: "'Roboto', Arial, sans-serif",
+                                            borderTop: '1px solid #3a3a3c',
+                                            color: '#aaaaaa',
+                                        }}
+                                    >
                                         <span>Score: {result.score_A} - {result.score_B}</span>
                                     </div>
                                 )}
@@ -463,6 +700,74 @@ function SearchContent() {
                         </svg>
                     </div>
                     <p className="text-muted-foreground">Enter a search query to find points</p>
+                </div>
+            )}
+
+            {/* Recommendations Section */}
+            {recommendations.length > 0 && (
+                <div className={`mt-12 ${results.length > 0 ? 'border-t border-border pt-8' : ''}`}>
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="h-8 w-1 bg-gradient-to-b from-amber-500 to-orange-500 rounded-full"></div>
+                        <h2 className="text-xl font-semibold text-foreground">
+                            {results.length === 0
+                                ? "Découvrez nos meilleurs points"
+                                : "Vous pourriez aussi aimer..."}
+                        </h2>
+                        <span className="text-sm text-muted-foreground">
+                            ({recommendations.length} {results.length === 0 ? "highlights" : "points similaires"})
+                        </span>
+                    </div>
+
+                    {loadingRecommendations ? (
+                        <div className="flex justify-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                            {recommendations.map((rec) => {
+                                const videoSlug = getSlug(rec.match_id);
+                                const clipId = getClipId(rec);
+                                return (
+                                    <Link
+                                        key={rec.id}
+                                        href={`/watch/${videoSlug}?clip=${clipId}&backUrl=${encodeURIComponent(getBackUrl())}`}
+                                        className="group bg-card rounded-lg overflow-hidden border-2 border-amber-500/30 hover:border-amber-500 transition-all hover:shadow-lg hover:shadow-amber-500/10"
+                                    >
+                                        {/* Thumbnail */}
+                                        <div className="aspect-video bg-muted relative">
+                                            <div className="absolute top-2 left-2 z-10 bg-black/60 px-2 py-0.5 rounded text-xs font-mono text-white">
+                                                Set {rec.set_num} | Pt {rec.point_id}
+                                            </div>
+                                            <div className="absolute top-2 right-2 z-10">
+                                                <span className="bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 rounded text-xs font-medium text-white">
+                                                    Similaire
+                                                </span>
+                                            </div>
+                                            <img
+                                                src={`${API_URL}/api/videos/${videoSlug}/clips/${clipId}/thumbnail`}
+                                                alt={`Point ${rec.point_id}`}
+                                                className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
+                                                onError={(e) => e.currentTarget.style.display = 'none'}
+                                            />
+                                        </div>
+
+                                        {/* Info */}
+                                        <div className="p-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${rec.winner === 'FAN-ZHENDONG' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'
+                                                    }`}>
+                                                    {rec.winner}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {rec.nb_coups} shots
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -495,22 +800,58 @@ function SearchContent() {
 // Suspense wrapper is required when using useSearchParams in client component
 export default function SearchPage() {
     return (
-        <div className="min-h-screen bg-background text-foreground">
-            {/* Header */}
-            <header className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b border-border">
+        <div
+            className="min-h-screen"
+            style={{
+                background: '#1c1c1e',
+                color: '#f5f5f7',
+            }}
+        >
+            {/* Header - Glassmorphism */}
+            <header
+                className="sticky top-0 z-50"
+                style={{
+                    background: 'rgba(44, 44, 46, 0.8)',
+                    backdropFilter: 'blur(15px)',
+                    WebkitBackdropFilter: 'blur(15px)',
+                    borderBottom: '1px solid #3a3a3c',
+                }}
+            >
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4 justify-between">
                     <div className="flex items-center gap-4">
                         <Link
                             href="/"
-                            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+                            className="flex items-center gap-2 transition-colors"
+                            style={{ color: '#86868b' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = '#86868b'}
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.25"
+                                viewBox="0 0 24 24"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                             </svg>
-                            <span className="text-sm">Back</span>
+                            <span
+                                className="text-sm"
+                                style={{ fontFamily: "'Inter', sans-serif" }}
+                            >Back</span>
                         </Link>
-                        <div className="h-4 w-px bg-border" />
-                        <h1 className="text-lg font-medium text-foreground">
+                        <div
+                            className="h-4 w-px"
+                            style={{ background: '#3a3a3c' }}
+                        />
+                        <h1
+                            className="text-lg font-medium"
+                            style={{
+                                fontFamily: "'Playfair Display', Georgia, serif",
+                                color: '#f5f5f7',
+                                letterSpacing: '-0.02em',
+                            }}
+                        >
                             Search Points
                         </h1>
                     </div>
@@ -519,7 +860,14 @@ export default function SearchPage() {
                 </div>
             </header>
 
-            <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading search...</div>}>
+            <Suspense fallback={
+                <div
+                    className="p-8 text-center"
+                    style={{ color: '#86868b', fontFamily: "'Inter', sans-serif" }}
+                >
+                    Loading search...
+                </div>
+            }>
                 <SearchContent />
             </Suspense>
         </div>

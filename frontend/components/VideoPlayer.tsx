@@ -9,8 +9,8 @@ interface VideoPlayerProps {
 }
 
 /**
- * VideoPlayer component - Custom HTML5 video player with seek functionality
- * Dark themed, inspired by modern video players
+ * VideoPlayer component - Custom HTML5 video player
+ * Modern Luxury Editorial design - Midjourney / Apple Dark inspired
  */
 export default function VideoPlayer({ src, title, description }: VideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -257,9 +257,16 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
 
     return (
         <div className="w-full max-w-4xl mx-auto">
-            {/* Video container */}
+            {/* Video container - Glassmorphism with fine border */}
             <div
-                className="relative rounded-xl overflow-hidden bg-zinc-900 border border-border shadow-2xl shadow-black/50 group"
+                className="relative overflow-hidden group"
+                style={{
+                    borderRadius: '16px',
+                    background: 'rgba(44, 44, 46, 0.8)',
+                    backdropFilter: 'blur(15px)',
+                    WebkitBackdropFilter: 'blur(15px)',
+                    border: '1px solid #3a3a3c',
+                }}
                 onMouseEnter={() => setShowControls(true)}
             >
                 {/* Video element */}
@@ -267,7 +274,8 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                     ref={videoRef}
                     src={src}
                     crossOrigin="anonymous"
-                    className="w-full aspect-video bg-black cursor-pointer"
+                    className="w-full aspect-video cursor-pointer"
+                    style={{ background: '#1c1c1e' }}
                     preload="auto"
                     onClick={togglePlay}
                     onLoadedMetadata={handleLoadedMetadata}
@@ -283,9 +291,12 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                     Your browser does not support the video tag.
                 </video>
 
-                {/* Loading/Buffering indicator */}
+                {/* Loading/Buffering indicator - Refined */}
                 {(isLoading || isBuffering) && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    <div
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{ background: 'rgba(28, 28, 30, 0.6)' }}
+                    >
                         <div className="flex flex-col items-center gap-4">
                             {/* Circular progress with percentage */}
                             <div className="relative w-20 h-20">
@@ -295,145 +306,213 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                                         cx="40"
                                         cy="40"
                                         r="36"
-                                        stroke="currentColor"
-                                        strokeWidth="6"
+                                        stroke="#3a3a3c"
+                                        strokeWidth="2"
                                         fill="transparent"
-                                        className="text-zinc-700"
                                     />
-                                    {/* Progress circle */}
+                                    {/* Progress circle - Electric Blue */}
                                     <circle
                                         cx="40"
                                         cy="40"
                                         r="36"
-                                        stroke="currentColor"
-                                        strokeWidth="6"
+                                        stroke="#0a84ff"
+                                        strokeWidth="2"
                                         fill="transparent"
                                         strokeLinecap="round"
-                                        className="text-purple-500 transition-all duration-300"
+                                        className="transition-all duration-300"
                                         style={{
                                             strokeDasharray: `${2 * Math.PI * 36}`,
                                             strokeDashoffset: `${2 * Math.PI * 36 * (1 - loadProgress / 100)}`,
                                         }}
                                     />
                                 </svg>
-                                {/* Percentage text */}
+                                {/* Percentage text - Playfair Display */}
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                    <span className="text-white font-bold text-lg">
+                                    <span
+                                        className="font-medium text-lg"
+                                        style={{
+                                            fontFamily: "'Playfair Display', Georgia, serif",
+                                            color: '#f5f5f7'
+                                        }}
+                                    >
                                         {Math.round(loadProgress)}%
                                     </span>
                                 </div>
                             </div>
-                            <p className="text-zinc-400 text-sm font-medium">
+                            <p
+                                className="text-sm font-normal"
+                                style={{
+                                    fontFamily: "'Inter', sans-serif",
+                                    color: '#86868b'
+                                }}
+                            >
                                 {isLoading ? "Chargement de la vidéo..." : "Buffering..."}
                             </p>
                         </div>
                     </div>
                 )}
 
-                {/* Play overlay (center button) - only show when not loading */}
+                {/* Play overlay (center button) - Refined */}
                 {!isPlaying && !isLoading && !isBuffering && (
                     <div
-                        className="absolute inset-0 flex items-center justify-center bg-black/20 cursor-pointer"
+                        className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                        style={{ background: 'rgba(28, 28, 30, 0.3)' }}
                         onClick={togglePlay}
                     >
-                        <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center hover:bg-white/20 transition-all duration-200 hover:scale-110">
-                            <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M8 5v14l11-7z" />
+                        <div
+                            className="w-20 h-20 flex items-center justify-center transition-all duration-300 hover:scale-110"
+                            style={{
+                                borderRadius: '50%',
+                                background: 'rgba(44, 44, 46, 0.8)',
+                                backdropFilter: 'blur(15px)',
+                                WebkitBackdropFilter: 'blur(15px)',
+                                border: '1px solid #3a3a3c',
+                            }}
+                        >
+                            <svg
+                                className="w-8 h-8 ml-1"
+                                fill="none"
+                                stroke="#f5f5f7"
+                                strokeWidth="1.25"
+                                viewBox="0 0 24 24"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
                             </svg>
                         </div>
                     </div>
                 )}
 
-                {/* Controls overlay */}
+                {/* Controls overlay - Glass effect */}
                 <div
-                    className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-4 pb-4 pt-16 transition-opacity duration-300 ${showControls || !isPlaying ? "opacity-100" : "opacity-0"
-                        }`}
+                    className={`absolute bottom-0 left-0 right-0 px-5 pb-5 pt-20 transition-opacity duration-300 ${showControls || !isPlaying ? "opacity-100" : "opacity-0"}`}
+                    style={{
+                        background: 'linear-gradient(to top, rgba(28, 28, 30, 0.95) 0%, rgba(28, 28, 30, 0.6) 50%, transparent 100%)',
+                    }}
                 >
-                    {/* Progress bar */}
+                    {/* Progress bar - Minimal 3px, thickens on hover */}
                     <div
                         ref={progressRef}
-                        className="relative h-1.5 bg-zinc-700/50 rounded-full cursor-pointer group/progress mb-3 hover:h-2 transition-all"
+                        className="relative cursor-pointer group/progress mb-4 transition-all duration-200"
+                        style={{
+                            height: '3px',
+                            borderRadius: '2px',
+                            background: 'rgba(58, 58, 60, 0.6)',
+                        }}
                         onClick={handleProgressClick}
                         onMouseDown={handleProgressMouseDown}
+                        onMouseEnter={(e) => e.currentTarget.style.height = '5px'}
+                        onMouseLeave={(e) => e.currentTarget.style.height = '3px'}
                     >
                         {/* Buffered */}
                         <div
-                            className="absolute inset-y-0 left-0 bg-zinc-500/50 rounded-full"
-                            style={{ width: `${bufferedProgress}%` }}
+                            className="absolute inset-y-0 left-0"
+                            style={{
+                                width: `${bufferedProgress}%`,
+                                background: 'rgba(134, 134, 139, 0.4)',
+                                borderRadius: '2px',
+                            }}
                         />
-                        {/* Progress */}
+                        {/* Progress - Electric Blue */}
                         <div
-                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
-                            style={{ width: `${progress}%` }}
+                            className="absolute inset-y-0 left-0"
+                            style={{
+                                width: `${progress}%`,
+                                background: '#0a84ff',
+                                borderRadius: '2px',
+                            }}
                         />
                         {/* Seek handle */}
                         <div
-                            className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg transition-transform ${isSeeking ? "scale-125" : "scale-0 group-hover/progress:scale-100"
-                                }`}
-                            style={{ left: `calc(${progress}% - 8px)` }}
+                            className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 transition-transform duration-200 ${isSeeking ? "scale-125" : "scale-0 group-hover/progress:scale-100"}`}
+                            style={{
+                                left: `calc(${progress}% - 6px)`,
+                                background: '#f5f5f7',
+                                borderRadius: '50%',
+                            }}
                         />
                     </div>
 
                     {/* Controls row */}
-                    <div className="flex items-center gap-4">
-                        {/* Play/Pause */}
+                    <div className="flex items-center gap-5">
+                        {/* Play/Pause - Thin stroke icon */}
                         <button
-                            className="text-white hover:text-zinc-300 transition-colors"
+                            className="transition-colors duration-200"
+                            style={{ color: '#f5f5f7' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
                             onClick={togglePlay}
                         >
                             {isPlaying ? (
-                                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6" />
                                 </svg>
                             ) : (
-                                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
                                 </svg>
                             )}
                         </button>
 
-                        {/* Skip backward 10s */}
+                        {/* Skip backward 10s - Thin stroke */}
                         <button
-                            className="text-white hover:text-zinc-300 transition-colors"
+                            className="transition-colors duration-200"
+                            style={{ color: '#f5f5f7' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
                             onClick={() => skip(-10)}
                         >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-                                <text x="9" y="14" fontSize="6" fill="currentColor">10</text>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
                             </svg>
                         </button>
 
-                        {/* Skip forward 10s */}
+                        {/* Skip forward 10s - Thin stroke */}
                         <button
-                            className="text-white hover:text-zinc-300 transition-colors"
+                            className="transition-colors duration-200"
+                            style={{ color: '#f5f5f7' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
                             onClick={() => skip(10)}
                         >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" />
-                                <text x="9" y="14" fontSize="6" fill="currentColor">10</text>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
                             </svg>
                         </button>
 
-                        {/* Time */}
-                        <div className="text-sm text-zinc-300 font-mono">
-                            {formatTime(currentTime)} / {formatTime(duration)}
+                        {/* Time - Inter font with Playfair for numbers */}
+                        <div
+                            className="text-sm tracking-wide"
+                            style={{
+                                fontFamily: "'Inter', sans-serif",
+                                color: '#86868b',
+                            }}
+                        >
+                            <span style={{ fontFamily: "'Playfair Display', serif", color: '#f5f5f7' }}>
+                                {formatTime(currentTime)}
+                            </span>
+                            <span className="mx-1">/</span>
+                            <span>{formatTime(duration)}</span>
                         </div>
 
                         <div className="flex-1" />
 
-                        {/* Volume */}
+                        {/* Volume - Thin stroke */}
                         <div className="flex items-center gap-2 group/volume">
                             <button
-                                className="text-white hover:text-zinc-300 transition-colors"
+                                className="transition-colors duration-200"
+                                style={{ color: '#f5f5f7' }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
                                 onClick={toggleMute}
                             >
                                 {isMuted || volume === 0 ? (
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
                                     </svg>
                                 ) : (
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                                     </svg>
                                 )}
                             </button>
@@ -444,22 +523,28 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                                 step="0.05"
                                 value={isMuted ? 0 : volume}
                                 onChange={handleVolumeChange}
-                                className="w-0 group-hover/volume:w-20 transition-all duration-200 cursor-pointer accent-purple-500"
+                                className="w-0 group-hover/volume:w-20 transition-all duration-200 cursor-pointer"
+                                style={{
+                                    accentColor: '#0a84ff',
+                                }}
                             />
                         </div>
 
-                        {/* Fullscreen */}
+                        {/* Fullscreen - Thin stroke */}
                         <button
-                            className="text-white hover:text-zinc-300 transition-colors"
+                            className="transition-colors duration-200"
+                            style={{ color: '#f5f5f7' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
                             onClick={toggleFullscreen}
                         >
                             {isFullscreen ? (
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
                                 </svg>
                             ) : (
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
                                 </svg>
                             )}
                         </button>
@@ -467,23 +552,80 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                 </div>
             </div>
 
-            {/* Keyboard shortcuts hint */}
-            <div className="mt-4 flex items-center justify-center gap-6 text-xs text-muted-foreground">
-                <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-foreground font-mono">Space</kbd> Play/Pause</span>
-                <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-foreground font-mono">←</kbd> <kbd className="px-1.5 py-0.5 bg-muted rounded text-foreground font-mono">→</kbd> Skip 10s</span>
-                <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-foreground font-mono">F</kbd> Fullscreen</span>
+            {/* Keyboard shortcuts hint - Refined styling */}
+            <div
+                className="mt-5 flex items-center justify-center gap-8 text-xs"
+                style={{
+                    fontFamily: "'Inter', sans-serif",
+                    color: '#86868b',
+                }}
+            >
+                <span>
+                    <kbd
+                        className="px-2 py-1 font-mono"
+                        style={{
+                            background: 'rgba(44, 44, 46, 0.8)',
+                            borderRadius: '6px',
+                            border: '1px solid #3a3a3c',
+                            color: '#f5f5f7',
+                        }}
+                    >Space</kbd> Play/Pause
+                </span>
+                <span>
+                    <kbd
+                        className="px-2 py-1 font-mono"
+                        style={{
+                            background: 'rgba(44, 44, 46, 0.8)',
+                            borderRadius: '6px',
+                            border: '1px solid #3a3a3c',
+                            color: '#f5f5f7',
+                        }}
+                    >←</kbd> <kbd
+                        className="px-2 py-1 font-mono"
+                        style={{
+                            background: 'rgba(44, 44, 46, 0.8)',
+                            borderRadius: '6px',
+                            border: '1px solid #3a3a3c',
+                            color: '#f5f5f7',
+                        }}
+                    >→</kbd> Skip 10s
+                </span>
+                <span>
+                    <kbd
+                        className="px-2 py-1 font-mono"
+                        style={{
+                            background: 'rgba(44, 44, 46, 0.8)',
+                            borderRadius: '6px',
+                            border: '1px solid #3a3a3c',
+                            color: '#f5f5f7',
+                        }}
+                    >F</kbd> Fullscreen
+                </span>
             </div>
 
-            {/* Metadata section */}
+            {/* Metadata section - Editorial typography */}
             {(title || description) && (
-                <div className="mt-6 space-y-2">
+                <div className="mt-8 space-y-3">
                     {title && (
-                        <h2 className="text-xl font-medium text-foreground tracking-tight">
+                        <h2
+                            className="text-2xl font-medium tracking-tight"
+                            style={{
+                                fontFamily: "'Playfair Display', Georgia, serif",
+                                color: '#f5f5f7',
+                                letterSpacing: '-0.02em',
+                            }}
+                        >
                             {title}
                         </h2>
                     )}
                     {description && (
-                        <p className="text-sm text-muted-foreground">
+                        <p
+                            className="text-sm leading-relaxed"
+                            style={{
+                                fontFamily: "'Inter', sans-serif",
+                                color: '#86868b',
+                            }}
+                        >
                             {description}
                         </p>
                     )}
@@ -492,3 +634,4 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
         </div>
     );
 }
+
