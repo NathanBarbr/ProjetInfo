@@ -3,7 +3,7 @@
         "id": "fan-zhendong-vs-moregard",
         "title": "FAN Zhendong vs MOREGARD",
         "description": "Match de ping-pong professionnel",
-        "filename": "FAN-ZHENDONG_vs_TRULS-MOREGARD_web.mp4",
+        "filename": "FAN-ZHENDONG_vs_TRULS-MOREGARD.mp4",
         "match_folder": "backend/videos/fan-zhendong-vs-moregard",
         "thumbnail": "FAN-ZHENDONG_vs_TRULS-MOREGARD.jpg",
         "has_clips": true
@@ -13,7 +13,7 @@
         "title": "HUGO Calderano vs FELIX Lebrun",
         "description": "Match de ping-pong professionnel - Jeux Olympiques Paris 2024",
         "filename": "HUGO-CALDERANO_vs_FELIX-LEBRUN.mp4",
-        "match_folder": "backend/videos/hugo-calderano-vs-felix-lebrun",
+        "match_folder": "backend/videos/HUGO-CALDERANO_vs_FELIX-LEBRUN",
         "thumbnail": "HUGO-CALDERANO_vs_FELIX-LEBRUN.jpg",
         "has_clips": true
     }
