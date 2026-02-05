@@ -21,10 +21,7 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
                 <img
                     src={`http://localhost:8000/api/videos/${id}/thumbnail`}
                     alt={title}
-                    className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
-                    style={{ opacity: 0.9 }}
-                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.9'}
+                    className="w-full h-full object-cover"
                     onError={(e) => {
                         e.currentTarget.style.display = 'none';
                     }}
@@ -46,27 +43,6 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
                     >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
                     </svg>
-                </div>
-
-                {/* Hover overlay with play button */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div
-                        className="p-4"
-                        style={{
-                            background: 'rgba(10, 132, 255, 0.9)',
-                            borderRadius: '50%',
-                        }}
-                    >
-                        <svg
-                            className="w-7 h-7"
-                            fill="none"
-                            stroke="#fff"
-                            strokeWidth="1.5"
-                            viewBox="0 0 24 24"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
-                        </svg>
-                    </div>
                 </div>
             </div>
 
