@@ -11,7 +11,6 @@ interface VideoPlayerProps {
 
 /**
  * VideoPlayer component - Custom HTML5 video player
- * Modern Luxury Editorial design - Midjourney / Apple Dark inspired
  */
 export default function VideoPlayer({ src, title, description, minimalUi = false }: VideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -313,7 +312,7 @@ export default function VideoPlayer({ src, title, description, minimalUi = false
                     ref={videoRef}
                     src={src}
                     crossOrigin="anonymous"
-                    className="w-full aspect-video cursor-pointer"
+                    className="w-full cursor-pointer"
                     style={{ background: '#1c1c1e' }}
                     preload="auto"
                     onClick={togglePlay}
@@ -349,7 +348,7 @@ export default function VideoPlayer({ src, title, description, minimalUi = false
                                         strokeWidth="2"
                                         fill="transparent"
                                     />
-                                    {/* Progress circle - Electric Blue */}
+                                    {/* Progress circle  */}
                                     <circle
                                         cx="40"
                                         cy="40"
@@ -365,12 +364,11 @@ export default function VideoPlayer({ src, title, description, minimalUi = false
                                         }}
                                     />
                                 </svg>
-                                {/* Percentage text - Playfair Display */}
+                                {/* Percentage text  */}
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <span
                                         className="font-medium text-lg"
                                         style={{
-                                            fontFamily: "'Playfair Display', Georgia, serif",
                                             color: '#f5f5f7'
                                         }}
                                     >
@@ -452,12 +450,11 @@ export default function VideoPlayer({ src, title, description, minimalUi = false
                                 borderRadius: '2px',
                             }}
                         />
-                        {/* Progress - Electric Blue */}
+                        {/* Progress - j'ai rajouté un gradient orange un peu a la yt */}
                         <div
-                            className="absolute inset-y-0 left-0"
+                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-orange-500 via-orange-600 to-red-600 transition-all duration-300"
                             style={{
                                 width: `${progress}%`,
-                                background: '#0a84ff',
                                 borderRadius: '2px',
                             }}
                         />
@@ -473,61 +470,53 @@ export default function VideoPlayer({ src, title, description, minimalUi = false
                     </div>
 
                     {/* Controls row */}
-                    <div className="flex items-center gap-5">
-                        {/* Play/Pause - Thin stroke icon */}
+                    <div className="flex items-center gap-5"> 
+                        
+                        {/* Play/Pause - Plus grand et trait plus affirmé */}
                         <button
-                            className="transition-colors duration-200"
-                            style={{ color: '#f5f5f7' }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
-                            onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                            className="transition-colors duration-200 text-[#f5f5f7] hover:text-[#86868b]"
                             onClick={togglePlay}
                         >
                             {isPlaying ? (
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                <svg className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6" />
                                 </svg>
                             ) : (
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                <svg className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
                                 </svg>
                             )}
                         </button>
 
-                        {/* Skip backward 10s - Thin stroke */}
+                        {/* Skip backward - w-5 -> w-7 */}
                         <button
-                            className="transition-colors duration-200"
-                            style={{ color: '#f5f5f7' }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
-                            onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                            className="transition-colors duration-200 text-[#f5f5f7] hover:text-[#86868b]"
                             onClick={() => skip(-10)}
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
                             </svg>
                         </button>
 
-                        {/* Skip forward 10s - Thin stroke */}
+                        {/* Skip forward - w-5 -> w-7 */}
                         <button
-                            className="transition-colors duration-200"
-                            style={{ color: '#f5f5f7' }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
-                            onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                            className="transition-colors duration-200 text-[#f5f5f7] hover:text-[#86868b]"
                             onClick={() => skip(10)}
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
                             </svg>
                         </button>
 
-                        {/* Time - Inter font with Playfair for numbers */}
+                        {/* Time - text-sm -> text-base (16px) */}
                         <div
-                            className="text-sm tracking-wide"
+                            className="text-base tracking-wide flex items-center"
                             style={{
                                 fontFamily: "'Inter', sans-serif",
                                 color: '#86868b',
                             }}
                         >
-                            <span style={{ fontFamily: "'Playfair Display', serif", color: '#f5f5f7' }}>
+                            <span className="min-w-[45px] text-right" style={{ fontFamily: "'Playfair Display', serif", color: '#f5f5f7' }}>
                                 {formatTime(currentTime)}
                             </span>
                             <span className="mx-1">/</span>
@@ -578,22 +567,19 @@ export default function VideoPlayer({ src, title, description, minimalUi = false
 
                         <div className="flex-1" />
 
-                        {/* Volume - Thin stroke */}
-                        <div className="flex items-center gap-2 group/volume">
+                        {/* Volume - Plus grand et slider plus large */}
+                        <div className="flex items-center gap-3 group/volume">
                             <button
-                                className="transition-colors duration-200"
-                                style={{ color: '#f5f5f7' }}
-                                onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
-                                onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                                className="transition-colors duration-200 text-[#f5f5f7] hover:text-[#86868b]"
                                 onClick={toggleMute}
                             >
                                 {isMuted || volume === 0 ? (
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
                                     </svg>
                                 ) : (
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                                     </svg>
                                 )}
@@ -605,27 +591,26 @@ export default function VideoPlayer({ src, title, description, minimalUi = false
                                 step="0.05"
                                 value={isMuted ? 0 : volume}
                                 onChange={handleVolumeChange}
-                                className="w-0 group-hover/volume:w-20 transition-all duration-200 cursor-pointer"
+                                className="w-24 h-1.5 transition-all duration-300 cursor-pointer accent-[#f97316]"
                                 style={{
-                                    accentColor: '#0a84ff',
+                                    background: `linear-gradient(to right, #f97316 0%, #dc2626 ${volume * 100}%, #3a3a3c ${volume * 100}%)`,
+                                    borderRadius: '999px',
+                                    WebkitAppearance: 'none' 
                                 }}
                             />
                         </div>
 
-                        {/* Fullscreen - Thin stroke */}
+                        {/* Fullscreen - w-5 -> w-6 */}
                         <button
-                            className="transition-colors duration-200"
-                            style={{ color: '#f5f5f7' }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = '#86868b'}
-                            onMouseLeave={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                            className="transition-colors duration-200 text-[#f5f5f7] hover:text-[#86868b]"
                             onClick={toggleFullscreen}
                         >
                             {isFullscreen ? (
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
                                 </svg>
                             ) : (
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
                                 </svg>
                             )}
