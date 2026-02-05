@@ -330,7 +330,6 @@ export default function WatchPage() {
                             </svg>
                             <span
                                 className="text-sm"
-                                style={{ fontFamily: "'Inter', sans-serif" }}
                             >
                                 {backUrl ? "Back to Search" : "Back"}
                             </span>
@@ -343,7 +342,6 @@ export default function WatchPage() {
                         {/* Breadcrumb: Match title > Clip */}
                         <div
                             className="flex items-center gap-2 text-sm overflow-hidden"
-                            style={{ fontFamily: "'Inter', sans-serif" }}
                         >
                             {currentClip ? (
                                 <>
@@ -360,7 +358,6 @@ export default function WatchPage() {
                                     <span
                                         className="font-medium truncate"
                                         style={{
-                                            fontFamily: "'Playfair Display', Georgia, serif",
                                             color: '#f5f5f7',
                                         }}
                                     >
@@ -369,9 +366,8 @@ export default function WatchPage() {
                                 </>
                             ) : (
                                 <h1
-                                    className="text-lg font-medium truncate"
+                                    className="text-lg font-semibold truncate"
                                     style={{
-                                        fontFamily: "'Playfair Display', Georgia, serif",
                                         color: '#f5f5f7',
                                         letterSpacing: '-0.02em',
                                     }}
@@ -449,7 +445,6 @@ export default function WatchPage() {
                             <p
                                 className="text-lg"
                                 style={{
-                                    fontFamily: "'Playfair Display', Georgia, serif",
                                     color: '#86868b',
                                 }}
                             >
@@ -459,7 +454,6 @@ export default function WatchPage() {
                                 href="/"
                                 className="mt-4 inline-block text-sm transition-colors"
                                 style={{
-                                    fontFamily: "'Inter', sans-serif",
                                     color: '#0a84ff',
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
