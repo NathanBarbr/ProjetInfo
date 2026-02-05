@@ -8,16 +8,30 @@ interface VideoCardProps {
 
 /**
  * VideoCard component - Displays a video thumbnail with hover effects
- * Modern Luxury Editorial / YouTube seamless style
  */
 export default function VideoCard({ id, title, description }: VideoCardProps) {
     return (
-        <Link href={`/watch/${id}`} className="group block">
-            {/* Thumbnail - Seamless, no border */}
+        <Link href={`/watch/${id}`} className="group block p-2 rounded-xl relative">
+            {/* Hover halo on the whole card */}
+            <div className="absolute 
+                inset-0 
+                rounded-xl 
+                opacity-0 
+                scale-95              /* Commence un peu plus petit */
+                group-hover:opacity-60 
+                group-hover:scale-103     /* S'agrandit au hover */
+                transition-all 
+                duration-300 
+                pointer-events-none" 
+                style={{ backgroundColor: 'rgba(142, 144, 148, 0.1)' }} />
+
+            <div className="relative">
+            
             <div
                 className="aspect-video relative overflow-hidden"
                 style={{ borderRadius: '12px' }}
             >
+                
                 <img
                     src={`http://localhost:8000/api/videos/${id}/thumbnail`}
                     alt={title}
@@ -26,6 +40,8 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
                         e.currentTarget.style.display = 'none';
                     }}
                 />
+
+                
 
                 {/* Fallback pattern (visible if img hidden) */}
                 <div
@@ -47,7 +63,7 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
             </div>
 
             {/* Video info - YouTube style with Roboto */}
-            <div className="pt-3 pb-6 px-0">
+            <div className="pt-4  px-0 relative">
                 <h3
                     className="text-sm font-medium line-clamp-2 leading-snug"
                     style={{
@@ -70,6 +86,7 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
                         {description}
                     </p>
                 )}
+            </div>
             </div>
         </Link>
     );
