@@ -537,7 +537,6 @@ function SearchContent() {
                                         WebkitBackdropFilter: 'blur(8px)',
                                         borderRadius: '6px',
                                         color: '#f5f5f7',
-                                        fontFamily: "'Playfair Display', Georgia, serif",
                                     }}
                                 >
                                     Set {result.set_num} | Pt {result.point_id}
@@ -824,7 +823,6 @@ export default function SearchPage() {
                         <h1
                             className="text-lg font-medium"
                             style={{
-                                fontFamily: "'Playfair Display', Georgia, serif",
                                 color: '#f5f5f7',
                                 letterSpacing: '-0.02em',
                             }}

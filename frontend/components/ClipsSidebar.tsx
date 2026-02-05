@@ -83,7 +83,7 @@ export default function ClipsSidebar({
             </div>
 
             {/* Set filter tabs - YouTube chips style */}
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
                 {/* All button */}
                 <button
                     onClick={() => setSelectedSet(null)}
@@ -124,7 +124,7 @@ export default function ClipsSidebar({
             <div
                 className="space-y-2 overflow-y-auto pr-2"
                 style={{
-                    maxHeight: 'calc(100vh - 220px)',
+                    maxHeight: 'calc(100vh - 222px)',
                     scrollbarWidth: 'thin',
                     scrollbarColor: '#3a3a3c transparent',
                 }}
@@ -135,7 +135,10 @@ export default function ClipsSidebar({
                     return (
                         <button
                             key={clip.id}
-                            onClick={() => onClipSelect(clip.id)}
+                            onClick={(e) => {
+                                e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                onClipSelect(clip.id);
+                            }}
                             className="w-full flex gap-2 p-0 text-left transition-all duration-150 group rounded-lg"
                             style={{
                                 background: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
@@ -147,20 +150,25 @@ export default function ClipsSidebar({
                                 if (!isActive) e.currentTarget.style.background = 'transparent';
                             }}
                         >
-                            {/* Index number */}
+
                             <div
-                                className="w-6 flex-shrink-0 flex items-center justify-center text-xs"
+                                className="w-6 flex-shrink-0 flex items-center justify-center text-xs relative"
                                 style={{
                                     fontFamily: "'Roboto', Arial, sans-serif",
                                     color: isActive ? '#f5f5f7' : '#aaaaaa',
                                 }}
                             >
-                                {index + 1}
+                                {isActive && (
+                                    <div
+                                        className="absolute left-0 top-0 h-full w-1"
+                                        style={{ background: '#ffffff' }}
+                                    />
+                                )}
                             </div>
-
+                                
                             {/* Thumbnail */}
                             <div
-                                className="w-[168px] h-[94px] flex-shrink-0 relative overflow-hidden"
+                                className="w-[120px] h-[68px] flex-shrink-0 my-2 relative overflow-hidden"
                                 style={{ borderRadius: '8px' }}
                             >
                                 {clip.has_thumbnail ? (
@@ -172,7 +180,7 @@ export default function ClipsSidebar({
                                     />
                                 ) : (
                                     <div
-                                        className="w-full h-full flex items-center justify-center"
+                                        className="w-full h-full flex i tems-center justify-center"
                                         style={{ background: '#2c2c2e' }}
                                     >
                                         <svg
@@ -187,41 +195,12 @@ export default function ClipsSidebar({
                                     </div>
                                 )}
 
-                                {/* Now playing indicator */}
-                                {isActive && (
-                                    <div
-                                        className="absolute inset-0 flex items-center justify-center"
-                                        style={{ background: 'rgba(0, 0, 0, 0.6)' }}
-                                    >
-                                        <svg
-                                            className="w-8 h-8"
-                                            fill="#fff"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                        </svg>
-                                    </div>
-                                )}
-
-                                {/* Hover play icon */}
-                                {!isActive && (
-                                    <div
-                                        className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                        style={{ background: 'rgba(0, 0, 0, 0.5)' }}
-                                    >
-                                        <svg
-                                            className="w-10 h-10"
-                                            fill="#fff"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path d="M8 5v14l11-7z" />
-                                        </svg>
-                                    </div>
-                                )}
+                                
+                                
                             </div>
 
                             {/* Info */}
-                            <div className="flex-1 min-w-0 py-1">
+                            <div className="flex-1 min-w-0 py-4">
                                 <h4
                                     className="text-sm font-medium line-clamp-2 leading-snug mb-1"
                                     style={{
@@ -235,7 +214,7 @@ export default function ClipsSidebar({
                                     className="text-xs"
                                     style={{
                                         fontFamily: "'Roboto', Arial, sans-serif",
-                                        color: '#aaaaaa',
+                                        color: '#f5f5f7',
                                     }}
                                 >
                                     Set {setNum}

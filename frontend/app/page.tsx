@@ -56,7 +56,6 @@ export default function Home() {
           <h1
             className="text-xl font-semibold tracking-tight"
             style={{
-              fontFamily: "'Playfair Display', Georgia, serif",
               color: '#f5f5f7',
               letterSpacing: '-0.02em',
             }}
@@ -158,7 +157,6 @@ export default function Home() {
             </div>
             <p
               style={{
-                fontFamily: "'Playfair Display', Georgia, serif",
                 color: '#86868b',
               }}
             >
@@ -178,7 +176,7 @@ export default function Home() {
 
         {/* Video grid */}
         {!loading && !error && videos.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-0 gap-y-8">
             {videos.map((video) => (
               <VideoCard
                 key={video.id}
