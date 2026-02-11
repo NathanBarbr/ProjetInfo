@@ -28,6 +28,8 @@ app.include_router(semantic.router)
 app.include_router(visualization.router)
 
 
+app.include_router(nl_search.router)
+
 @app.get("/")
 async def root():
     """Health check endpoint."""

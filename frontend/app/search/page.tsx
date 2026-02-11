@@ -218,8 +218,26 @@ function SearchContent() {
                 }
                 searchData = await semanticRes.json();
             } else {
-                // Standard search
-                const searchRes = await fetch(`${API_URL}/api/search?${params.toString()}`);
+                    let searchRes;
+
+                    const qParam = params.get("q");
+
+                    // Vérifie si on a uniquement une requête texte (pas de filtres avancés)
+                    const hasOnlyQ =
+                        qParam &&
+                        Array.from(params.keys()).every(
+                            key => ["q", "page", "size"].includes(key)
+                        );
+
+                    if (hasOnlyQ) {
+                        searchRes = await fetch(
+                            `${API_URL}/api/nl-search?query=${encodeURIComponent(qParam)}`
+                        );
+                    } else {
+                        searchRes = await fetch(
+                            `${API_URL}/api/search?${params.toString()}`
+                        );
+                    }
                 if (!searchRes.ok) {
                     const errorText = await searchRes.text();
                     throw new Error(`Search API error (${searchRes.status}): ${errorText}`);
