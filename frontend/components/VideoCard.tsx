@@ -19,7 +19,7 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
                 style={{ borderRadius: '12px' }}
             >
                 <img
-                    src={`http://localhost:8000/api/videos/${id}/thumbnail`}
+                    src={`http://localhost:8001/api/videos/${id}/thumbnail`}
                     alt={title}
                     className="w-full h-full object-cover"
                     onError={(e) => {

@@ -18,7 +18,7 @@ interface PointResult {
     winner?: string;
 }
 
-const API_URL = "http://localhost:8000";
+const API_URL = "http://localhost:8001";
 
 export default function ChatWidget() {
     const [isOpen, setIsOpen] = useState(false);
@@ -130,8 +130,8 @@ export default function ChatWidget() {
                             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                                 <div
                                     className={`max-w-[80%] rounded-2xl px-4 py-2 ${msg.role === "user"
-                                            ? "bg-purple-600 text-white"
-                                            : "bg-zinc-800 text-zinc-200"
+                                        ? "bg-purple-600 text-white"
+                                        : "bg-zinc-800 text-zinc-200"
                                         }`}
                                 >
                                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
