@@ -21,11 +21,18 @@ except ImportError:
     HAS_INDEXER = False
     print("[WARNING] Could not import ElasticSearchIndexer")
 
+try:
+    from embeddings.embedder import PointEmbedder
+    HAS_EMBEDDER = True
+except ImportError:
+    HAS_EMBEDDER = False
+    print("[WARNING] Could not import PointEmbedder")
+
 router = APIRouter(prefix="/api/semantic", tags=["semantic-search"])
 
 # Singleton indexer instance (lazy initialization)
 _indexer: Optional[ElasticSearchIndexer] = None
-
+_embedder: Optional[PointEmbedder] = None
 
 def get_indexer() -> ElasticSearchIndexer:
     """Get or create the ElasticSearchIndexer singleton."""
@@ -42,6 +49,18 @@ def get_indexer() -> ElasticSearchIndexer:
         _indexer.connect()
     return _indexer
 
+def get_embedder() -> PointEmbedder:
+    """Get or create the PointEmbedder singleton."""
+    global _embedder
+    if _embedder is None:
+        if not HAS_EMBEDDER:
+            raise HTTPException(
+                status_code=500,
+                detail="PointEmbedder not available"
+            )
+        _embedder = PointEmbedder()
+        _embedder.load_model()
+    return _embedder
 
 @router.get("/status")
 async def get_semantic_status():
@@ -54,7 +73,8 @@ async def get_semantic_status():
         return {
             "available": True,
             "index": indexer.INDEX_NAME,
-            "stats": stats
+            "stats": stats,
+            "embedder_available": HAS_EMBEDDER
         }
     except Exception as e:
         return {
@@ -278,3 +298,69 @@ async def get_point_similar(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error finding similar points: {str(e)}")
+
+@router.get("/search")
+async def text_semantic_search(
+    q: str = Query(..., description="Text query to embed"),
+    k: int = Query(20, ge=1, le=100, description="Number of results"),
+    match_id: Optional[str] = Query(None),
+    winner: Optional[str] = Query(None),
+    serveur: Optional[str] = Query(None),
+    set_num: Optional[int] = Query(None),
+    faute_type: Optional[str] = Query(None),
+    winning_shot: Optional[str] = Query(None),
+    service_lateralite: Optional[str] = Query(None),
+    service_zone: Optional[str] = Query(None)
+):
+    """
+    Perform a vector search based on a text query.
+    """
+    try:
+        indexer = get_indexer()
+        embedder = get_embedder()
+        
+        # Build filters dict
+        filters = {}
+        if match_id: filters["match_id"] = match_id
+        if winner: filters["winner"] = winner
+        if serveur: filters["serveur"] = serveur
+        if set_num: filters["set_num"] = set_num
+        if faute_type: filters["faute_type"] = faute_type
+        if winning_shot: filters["dernier_coup"] = winning_shot
+        if service_lateralite: filters["service_lateralite"] = service_lateralite
+        if service_zone: filters["service_zone"] = service_zone
+        
+        query_embedding = embedder.embed_query(q)
+        
+        results = indexer.hybrid_search(
+            query_embedding=query_embedding,
+            text_query=q,
+            k=k,
+            filters=filters if filters else None,
+            vector_weight=0.7 # Combine text and vector similarity
+        )
+        
+        # Format and enrich results
+        points = []
+        for r in results:
+            point = {
+                "id": r.get("_id"),
+                "similarity_score": r.get("_score"),
+                **{k: v for k, v in r.items() if not k.startswith("_")}
+            }
+            # Enrich with additional computed fields
+            point = enrich_point_data(point)
+            points.append(point)
+        
+        return {
+            "total": len(points),
+            "page": 1,
+            "size": k,
+            "pages": 1,
+            "mode": "semantic",
+            "points": points
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Semantic search error: {str(e)}")

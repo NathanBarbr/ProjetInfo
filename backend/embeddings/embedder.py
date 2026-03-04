@@ -76,10 +76,10 @@ class PointEmbedder:
                 "Installez-le avec: pip install sentence-transformers"
             )
         
-        print(f"🔄 Chargement du modèle '{self.model_name}'...")
+        print(f"Chargement du modèle '{self.model_name}'...")
         self.model = SentenceTransformer(self.model_name)
         self.embedding_dim = self.model.get_sentence_embedding_dimension()
-        print(f"✅ Modèle chargé! Dimension des embeddings: {self.embedding_dim}")
+        print(f"Modèle chargé! Dimension des embeddings: {self.embedding_dim}")
         
     def _format_sequence(self, sequence: str, mapping: Dict[str, str]) -> str:
         """Formate une séquence CSV en texte lisible."""

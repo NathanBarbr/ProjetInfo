@@ -541,6 +541,40 @@ class ElasticSearchIndexer:
         )
 
 
+
+    def get_all_points_with_embeddings(self, limit: int = 10000) -> List[Dict[str, Any]]:
+        """
+        Récupère tous les points avec leurs embeddings (pour la visualisation).
+        
+        Args:
+            limit: Nombre maximum de points à récupérer
+            
+        Returns:
+            Liste des documents avec embeddings
+        """
+        if self.client is None:
+            self.connect()
+            
+        # On récupère tous les champs nécessaires pour la visu
+        response = self.client.search(
+            index=self.INDEX_NAME,
+            query={"match_all": {}},
+            size=limit,
+            _source=["embedding", "match_id", "point_id", "faute_type", "winner", "nb_coups", "player_A", "player_B", "description", "clip_path", "score_A", "score_B"]
+        )
+        
+        hits = response["hits"]["hits"]
+        results = []
+        for hit in hits:
+            # On vérifie que l'embedding est présent
+            if "embedding" in hit["_source"]:
+                result = hit["_source"]
+                result["_id"] = hit["_id"]
+                results.append(result)
+                
+        return results
+
+
 if __name__ == "__main__":
     # Test de connexion
     indexer = ElasticSearchIndexer()

@@ -134,9 +134,98 @@ async def get_video_metadata(video_id: str):
     )
 
 
-# =====================
-# Clips endpoints
-# =====================
+@router.get("/stream/{file_path:path}")
+async def stream_video_file(file_path: str, request: Request, match_id: str = None):
+    """
+    Stream a video file given its relative path.
+    Searches in:
+    1. VIDEOS_DIR
+    2. PROJECT_ROOT (for match folders)
+    
+    If match_id is provided, it searches specifically in that match's folder first.
+    """
+    import os
+    
+     # Security check: prevent directory traversal
+    if ".." in file_path:
+        raise HTTPException(status_code=400, detail="Invalid path")
+        
+    videos_meta = load_videos_metadata()
+    found_path = None
+    
+    # 0. Optimization: If match_id is provided, look there directly
+    if match_id:
+        for video in videos_meta:
+            # Check against video ID or the match folder name itself if we used that as ID
+            if video["id"] == match_id or video.get("match_folder", "").endswith(match_id):
+                if video.get("match_folder"):
+                    possible_path = PROJECT_ROOT / video["match_folder"] / file_path
+                    if possible_path.exists():
+                        found_path = possible_path
+                        break
+    
+    # 1. Try match search if not found yet (and looks like a clip)
+    if not found_path and file_path.startswith("clips/"):
+        for video in videos_meta:
+            if video.get("match_folder"):
+                 possible_match_path = PROJECT_ROOT / video["match_folder"] / file_path
+                 if possible_match_path.exists():
+                     found_path = possible_match_path
+                     break
+
+    # 2. Try directly if it's a full relative path from PROJECT_ROOT
+    if not found_path:
+        possible_path = PROJECT_ROOT / file_path
+        if possible_path.exists() and possible_path.is_file():
+            found_path = possible_path
+    
+    # 3. Try relative to VIDEOS_DIR
+    if not found_path:
+        possible_path = VIDEOS_DIR / file_path
+        if possible_path.exists() and possible_path.is_file():
+            found_path = possible_path
+    
+    if not found_path:
+        raise HTTPException(status_code=404, detail=f"Video file '{file_path}' not found")
+        
+    file_size = found_path.stat().st_size
+    range_header = request.headers.get("range")
+
+    if range_header:
+        range_value = range_header.strip().lower()
+        if range_value.startswith("bytes="):
+            range_value = range_value[6:]
+        
+        parts = range_value.split("-")
+        start = int(parts[0]) if parts[0] else 0
+        end = int(parts[1]) if parts[1] else file_size - 1
+        end = min(end, file_size - 1)
+        content_length = end - start + 1
+        
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(content_length),
+            "Content-Type": "video/mp4",
+        }
+        
+        return StreamingResponse(
+            stream_video_range(found_path, start, end),
+            status_code=206,
+            headers=headers,
+            media_type="video/mp4",
+        )
+    else:
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+        }
+        return StreamingResponse(
+            stream_video_range(found_path, 0, file_size - 1),
+            headers=headers,
+            media_type="video/mp4",
+        )
+
 
 # Base path for match folders (relative to project root)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
