@@ -11,7 +11,7 @@ interface Video {
   description?: string;
 }
 
-const API_URL = "http://localhost:8000";
+const API_URL = "http://localhost:8001";
 
 export default function Home() {
   const [videos, setVideos] = useState<Video[]>([]);
@@ -94,6 +94,61 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               Search
+            </Link>
+            <Link
+              href="/visualization"
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-all duration-200"
+              style={{
+                background: 'rgba(58, 58, 60, 0.6)',
+                border: '1px solid #3a3a3c',
+                borderRadius: '10px',
+                color: '#f5f5f7',
+                fontFamily: "'Inter', sans-serif",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)'; // Emerald color
+                e.currentTarget.style.borderColor = '#10b981';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(58, 58, 60, 0.6)';
+                e.currentTarget.style.borderColor = '#3a3a3c';
+              }}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.25"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+              Visualisation
+            </Link>
+            <Link
+              href="/compare"
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-all duration-200"
+              style={{
+                background: 'rgba(58, 58, 60, 0.6)',
+                border: '1px solid #3a3a3c',
+                borderRadius: '10px',
+                color: '#f5f5f7',
+                fontFamily: "'Inter', sans-serif",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 69, 58, 0.2)';
+                e.currentTarget.style.borderColor = '#ff453a';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(58, 58, 60, 0.6)';
+                e.currentTarget.style.borderColor = '#3a3a3c';
+              }}
+            >
+              Compare
             </Link>
           </div>
         </div>
