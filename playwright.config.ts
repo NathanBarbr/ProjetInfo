@@ -72,8 +72,8 @@ export default defineConfig({
     /* Run your local dev server before starting the tests */
     webServer: [
         {
-            command: 'cd backend && .\\venv\\Scripts\\activate && uvicorn main:app --port 8000',
-            url: 'http://localhost:8000',
+            command: 'cd backend && .\\venv\\Scripts\\activate && uvicorn main:app --port 8001',
+            url: 'http://localhost:8001',
             reuseExistingServer: !process.env.CI,
             timeout: 120 * 1000,
         },

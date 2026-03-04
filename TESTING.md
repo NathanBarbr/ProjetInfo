@@ -151,7 +151,7 @@ npm install
 npx playwright install
 ```
 
-**Configuration** : Les serveurs backend (port 8000) et frontend (port 3000) démarrent automatiquement via `playwright.config.ts`.
+**Configuration** : Les serveurs backend (port 8001) et frontend (port 3000) démarrent automatiquement via `playwright.config.ts`.
 
 **Commandes** :
 ```bash
@@ -231,7 +231,7 @@ pytest -m slow
 → Installer : `npm install` puis `npx playwright install`
 
 **E2E - Serveurs ne démarrent pas**
-→ Vérifier que ports 3000 et 8000 sont libres
+→ Vérifier que ports 3000 et 8001 sont libres
 
 ---
 
