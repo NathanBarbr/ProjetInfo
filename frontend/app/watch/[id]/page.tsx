@@ -6,6 +6,11 @@ import Link from "next/link";
 import VideoPlayer from "@/components/VideoPlayer";
 import ClipsSidebar from "@/components/ClipsSidebar";
 import ThemeToggle from "@/components/ThemeToggle";
+import ServerProfilePanel from "@/components/ServerProfilePanel";
+import PointTrajectory from "@/components/PointTrajectory";
+import MomentumChart from "@/components/MomentumChart";
+import { FavoriteItem, loadFavorites, upsertFavorite, removeFavorite } from "@/lib/favorites";
+
 
 interface VideoMeta {
     id: string;
@@ -19,13 +24,44 @@ interface Clip {
     has_thumbnail: boolean;
 }
 
+interface PointDetail {
+    match_id: string;
+    set_num: number;
+    point_id: number;
+    nb_coups?: number;
+    duree_frames?: number;
+    serveur?: string;
+    winner?: string;
+    faute_type?: string;
+    dernier_coup?: string;
+    service_zone?: string;
+    service_lateralite?: string;
+    is_set_point?: boolean;
+    is_point_gagnant?: boolean;
+    sequence_zones?: string;
+    sequence_effets?: string;
+    sequence_coups?: string;
+    player_A?: string;
+    player_B?: string;
+    score_A?: number;
+    score_B?: number;
+    set_A?: number;
+    set_B?: number;
+}
+
 interface ClipsData {
     video_id: string;
     sets: { [key: string]: Clip[] };
     total_clips: number;
 }
 
-const API_URL = "http://localhost:8000";
+interface CommentItem {
+    text: string;
+    createdAt: number;
+}
+
+const API_URL = "http://localhost:8001";          // vidéos/streams
+const SEARCH_API_URL = "http://localhost:8001";   // FastAPI + ES
 
 export default function WatchPage() {
     const params = useParams();
@@ -38,6 +74,13 @@ export default function WatchPage() {
     const [clipsData, setClipsData] = useState<ClipsData | null>(null);
     const [currentClip, setCurrentClip] = useState<string | null>(clipParam);
     const [error, setError] = useState<string | null>(null);
+    const [isFavorite, setIsFavorite] = useState(false);
+    const [pointDetail, setPointDetail] = useState<PointDetail | null>(null);
+    const [comments, setComments] = useState<CommentItem[]>([]);
+    const [newComment, setNewComment] = useState("");
+    const [queue, setQueue] = useState<{ videoSlug: string; clipId: string }[]>([]);
+    const [autoNext, setAutoNext] = useState(false);
+    const [skipSeconds, setSkipSeconds] = useState(1);
 
     // Fetch video metadata
     useEffect(() => {
@@ -66,6 +109,65 @@ export default function WatchPage() {
             });
     }, [videoId]);
 
+    // Fetch point detail for current clip
+    useEffect(() => {
+        if (!currentClip) {
+            setPointDetail(null);
+            return;
+        }
+
+        // extract point number
+        const match = currentClip.match(/point_(\d+)/);
+        if (!match) {
+            setPointDetail(null);
+            return;
+        }
+        const pointId = Number(match[1]);
+
+        const matchId = slugToMatchId(videoId.toString());
+
+        fetch(`${API_URL}/api/search/point/${matchId}/${pointId}`)
+            .then((res) => res.ok ? res.json() : null)
+            .then((data) => setPointDetail(data))
+            .catch(() => setPointDetail(null));
+    }, [videoId, currentClip]);
+
+    // Load queue if coming from "queue" param
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const hasQueue = searchParams.get("queue");
+        if (hasQueue) {
+            try {
+                const raw = localStorage.getItem("pp_queue");
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) setQueue(parsed);
+                }
+            } catch {
+                setQueue([]);
+            }
+        }
+    }, [searchParams]);
+
+    const getCommentKey = () => `pp_comments_${videoId}_${currentClip || "main"}`;
+
+    // Load comments for this video/clip
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        try {
+            const raw = localStorage.getItem(getCommentKey());
+            if (!raw) {
+                setComments([]);
+                return;
+            }
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) setComments(parsed);
+            else setComments([]);
+        } catch {
+            setComments([]);
+        }
+    }, [videoId, currentClip]);
+
     // Update URL when clip changes (without full navigation)
     // We want to preserve backUrl if it exists!
     const handleClipSelect = (clipId: string) => {
@@ -75,6 +177,14 @@ export default function WatchPage() {
         newParams.set("clip", clipId);
         window.history.pushState({}, "", `/watch/${videoId}?${newParams.toString()}`);
     };
+
+    // Sync favorite state with localStorage
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const favId = `${videoId}_${currentClip || "main"}`;
+        const exists = loadFavorites().some((f) => f.id === favId);
+        setIsFavorite(exists);
+    }, [videoId, currentClip]);
 
     // Get current video source
     const getVideoSrc = () => {
@@ -95,6 +205,91 @@ export default function WatchPage() {
             return currentClip;
         }
         return meta?.title || "Loading...";
+    };
+
+    const slugToMatchId = (slug: string) => {
+        const mapping: Record<string, string> = {
+            "fan-zhendong-vs-moregard": "FAN-ZHENDONG_vs_TRULS-MOREGARD",
+            "hugo-calderano-vs-felix-lebrun": "HUGO-CALDERANO_vs_FELIX-LEBRUN",
+        };
+        if (mapping[slug]) return mapping[slug];
+        const parts = slug.split("-vs-");
+        if (parts.length === 2) {
+            const left = parts[0].replace(/-/g, "-").toUpperCase();
+            const right = parts[1].replace(/-/g, "-").toUpperCase();
+            return `${left}_vs_${right}`;
+        }
+        return slug;
+    };
+
+    const toggleFavorite = () => {
+        const favId = `${videoId}_${currentClip || "main"}`;
+        const item: FavoriteItem = {
+            id: favId,
+            videoSlug: videoId,
+            clipId: currentClip,
+            title: getCurrentTitle(),
+            matchLabel: meta?.title,
+            thumbnail: currentClip ? `${API_URL}/api/videos/${videoId}/clips/${currentClip}/thumbnail` : undefined,
+            addedAt: Date.now()
+        };
+
+        if (isFavorite) {
+            removeFavorite(favId);
+            setIsFavorite(false);
+        } else {
+            upsertFavorite(item);
+            setIsFavorite(true);
+        }
+    };
+
+    const addComment = () => {
+        const text = newComment.trim();
+        if (!text) return;
+        const next: CommentItem[] = [{ text, createdAt: Date.now() }, ...comments];
+        setComments(next);
+        setNewComment("");
+        if (typeof window !== "undefined") {
+            localStorage.setItem(getCommentKey(), JSON.stringify(next));
+        }
+    };
+
+    // Auto-next handler based on duration
+    useEffect(() => {
+        if (!autoNext || queue.length === 0 || !currentClip) return;
+        const currentIndex = queue.findIndex(q => q.clipId === currentClip);
+        if (currentIndex === -1 || currentIndex === queue.length - 1) return; // no next
+        const durationSec = pointDetail?.duree_frames ? pointDetail.duree_frames / 25 : null;
+        if (!durationSec) return;
+        const ms = Math.max(1000, (durationSec - skipSeconds) * 1000);
+        const timer = setTimeout(() => {
+            const next = queue[currentIndex + 1];
+            if (next) {
+                const newParams = new URLSearchParams(window.location.search);
+                newParams.set("clip", next.clipId);
+                newParams.set("queue", "1");
+                window.location.href = `/watch/${next.videoSlug}?${newParams.toString()}`;
+            }
+        }, ms);
+        return () => clearTimeout(timer);
+    }, [autoNext, queue, currentClip, pointDetail, skipSeconds]);
+
+
+    const buildDescription = () => {
+        const p = pointDetail;
+        if (!p) return "Point complet.";
+        const parts: string[] = [];
+        parts.push(`Set ${p.set_num ?? "?"} · Point ${p.point_id ?? "?"}`);
+        if (p.nb_coups !== undefined) parts.push(`${p.nb_coups} coups`);
+        if (p.duree_frames !== undefined) parts.push(`~${Math.max(1, Math.round(p.duree_frames / 25))}s`);
+        if (p.serveur) {
+            parts.push(`Service ${p.serveur}${p.service_zone ? ` (${p.service_zone})` : ""}${p.service_lateralite ? ` main ${p.service_lateralite.replace("_", " ")}` : ""}`);
+        }
+        if (p.winner) parts.push(`Point remporté par ${p.winner}${p.is_point_gagnant ? " (gagnant direct)" : ""}`);
+        if (p.faute_type && p.faute_type !== "pt_gagne") parts.push(`Fin sur faute : ${p.faute_type}`);
+        if (p.dernier_coup) parts.push(`Dernier coup : ${p.dernier_coup}`);
+        if (p.is_set_point) parts.push("Balle de set");
+        return parts.join(". ") + ".";
     };
 
     return (
@@ -187,7 +382,43 @@ export default function WatchPage() {
                         </div>
                     </div>
 
-                    <ThemeToggle />
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={toggleFavorite}
+                            className={`px-3 py-2 text-sm rounded-lg border transition-colors ${isFavorite
+                                ? "border-amber-400 bg-amber-400 text-black"
+                                : "border-input bg-card text-foreground hover:bg-muted"
+                                }`}
+                        >
+                            {isFavorite ? "★ Favori" : "☆ Ajouter aux favoris"}
+                        </button>
+
+                        {queue.length > 0 && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <label className="flex items-center gap-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={autoNext}
+                                        onChange={(e) => setAutoNext(e.target.checked)}
+                                    />
+                                    Auto-next
+                                </label>
+                                <label className="flex items-center gap-1">
+                                    Skip
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={10}
+                                        value={skipSeconds}
+                                        onChange={(e) => setSkipSeconds(Number(e.target.value) || 0)}
+                                        className="w-12 px-1 py-0.5 bg-card border border-input rounded text-xs"
+                                    />
+                                    s avant fin
+                                </label>
+                            </div>
+                        )}
+                        <ThemeToggle />
+                    </div>
                 </div>
             </header>
 
@@ -250,18 +481,112 @@ export default function WatchPage() {
                                     title={getCurrentTitle()}
                                     description={currentClip ? undefined : meta?.description}
                                 />
+
+                                {/* Description */}
+                                {currentClip && (
+                                    <div className="mt-4 p-4 border border-input rounded-lg bg-card">
+                                        <h3 className="text-sm font-semibold mb-1">Description du point</h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            {buildDescription()}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Commentaires */}
+                                <div className="mt-4 p-4 border border-input rounded-lg bg-card">
+                                    <h3 className="text-sm font-semibold mb-3">Commentaires</h3>
+                                    <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                                        <input
+                                            type="text"
+                                            value={newComment}
+                                            onChange={(e) => setNewComment(e.target.value)}
+                                            placeholder="Écris un commentaire…"
+                                            className="flex-1 px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") addComment();
+                                            }}
+                                        />
+                                        <button
+                                            onClick={addComment}
+                                            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                                        >
+                                            Envoyer
+                                        </button>
+                                    </div>
+                                    {comments.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">Aucun commentaire pour l’instant.</p>
+                                    ) : (
+                                        <div className="space-y-3 max-h-64 overflow-auto pr-1">
+                                            {comments.map((c, idx) => (
+                                                <div key={idx} className="p-2 bg-background border border-input rounded-lg">
+                                                    <p className="text-sm text-foreground">{c.text}</p>
+                                                    <p className="text-[11px] text-muted-foreground mt-1">
+                                                        {new Date(c.createdAt).toLocaleString()}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
-                            {/* Clips sidebar */}
-                            {clipsData && clipsData.total_clips > 0 && (
-                                <ClipsSidebar
-                                    videoId={videoId}
-                                    clipsData={clipsData}
-                                    currentClip={currentClip}
-                                    onClipSelect={handleClipSelect}
-                                    apiUrl={API_URL}
-                                />
-                            )}
+                            {/* Right sidebar: clips */}
+                            <div className="w-full lg:w-80 flex flex-col gap-6 flex-shrink-0">
+                                {clipsData && clipsData.total_clips > 0 && (
+                                    <ClipsSidebar
+                                        videoId={videoId}
+                                        clipsData={clipsData}
+                                        currentClip={currentClip}
+                                        onClipSelect={handleClipSelect}
+                                        apiUrl={API_URL}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Point Trajectory Animation */}
+                    {currentClip && pointDetail?.sequence_zones && pointDetail?.sequence_effets && (
+                        <div className="mt-8 max-w-5xl mx-auto">
+                            <PointTrajectory
+                                sequenceZones={pointDetail.sequence_zones}
+                                sequenceEffets={pointDetail.sequence_effets}
+                                serveur={pointDetail.serveur || ""}
+                                winner={pointDetail.winner || ""}
+                                playerA={pointDetail.player_A || ""}
+                                playerB={pointDetail.player_B || ""}
+                            />
+                        </div>
+                    )}
+
+                    {/* Server Profile Panel — full width below video */}
+                    {currentClip && pointDetail?.serveur && (
+                        <div className="mt-8 max-w-5xl mx-auto">
+                            <ServerProfilePanel
+                                serverName={pointDetail.serveur}
+                                matchId={pointDetail.match_id || null}
+                                apiUrl={API_URL}
+                            />
+                        </div>
+                    )}
+
+                    {/* Momentum Chart */}
+                    {currentClip && pointDetail?.match_id && (
+                        <div className="mt-8 max-w-5xl mx-auto">
+                            <MomentumChart
+                                matchId={pointDetail.match_id}
+                                apiUrl={SEARCH_API_URL}
+                                currentPointId={pointDetail.point_id}
+                            />
+                            <div className="mt-3 text-center">
+                                <Link
+                                    href={`/compare?match_id=${encodeURIComponent(pointDetail.match_id)}`}
+                                    className="text-xs px-4 py-2 rounded-lg inline-flex items-center gap-1.5 transition-colors"
+                                    style={{ background: "#2c2c2e", color: "#0a84ff", border: "1px solid #3a3a3c" }}
+                                >
+                                    Voir la comparaison complète des joueurs
+                                </Link>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -269,4 +594,3 @@ export default function WatchPage() {
         </div>
     );
 }
-
