@@ -7,7 +7,53 @@ from routers.search import build_es_query, es_request, ES_INDEX
 router = APIRouter(prefix="/api/nl-search", tags=["nl-search"])
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL = "mistral:7b-instruct"   # recommandé pour structured output
+MODEL = "mistral:7b-instruct"
+
+ALLOWED_WINNING_SHOTS = {"topspin", "bloc", "poussette", "flip", "coupe"}
+PLAYER_FIELDS = {"player", "winner", "serveur"}
+
+
+def normalize_player_value(value: str | None) -> str | None:
+    """Normalize player names to indexed format (e.g. TRULS-MOREGARD)."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    return value.replace("_", "-").replace(" ", "-").upper()
+
+
+def sanitize_filters(filters: dict, original_query: str) -> dict:
+    """Validate and normalize LLM output to avoid false empty results."""
+    expected_keys = {
+        "player", "winner", "serveur", "set_num", "nb_coups_min", "nb_coups_max",
+        "effet", "lateralite", "faute_type", "winning_shot", "winning_shot_status",
+        "zone", "service_zone", "service_lateralite", "q"
+    }
+
+    sanitized = {k: filters.get(k) for k in expected_keys}
+
+    for field in PLAYER_FIELDS:
+        sanitized[field] = normalize_player_value(sanitized.get(field))
+
+    winning_shot = sanitized.get("winning_shot")
+    if isinstance(winning_shot, str):
+        shot = winning_shot.strip().lower()
+        sanitized["winning_shot"] = shot if shot in ALLOWED_WINNING_SHOTS else None
+    else:
+        sanitized["winning_shot"] = None
+
+    # If user asks for "winning points", keep this broad and valid.
+    if sanitized.get("faute_type") == "pt_gagne" and sanitized.get("winning_shot") is None:
+        sanitized["winning_shot_status"] = "winner"
+
+    has_structured = any(
+        v is not None for k, v in sanitized.items() if k not in {"q", "winning_shot_status"}
+    )
+    if not has_structured and not sanitized.get("q"):
+        sanitized["q"] = original_query
+
+    return sanitized
 
 
 # ==============================
@@ -39,12 +85,11 @@ STRICT RULES:
 - Use null when unknown.
 
 NORMALIZATION:
-- Replace dashes with spaces in player names.
-- Use proper capitalization (Example: Hugo Calderano).
+- Keep player names in indexed format when possible (UPPERCASE with dashes), e.g. TRULS-MOREGARD.
 
 SEMANTIC RULE:
 If the user asks for winning points, set:
-"faute_type": "pt_gagne"
+\"faute_type\": \"pt_gagne\"
 """
                     },
                     {
@@ -77,7 +122,7 @@ Return EXACTLY this JSON structure:
                     }
                 ],
                 "temperature": 0,
-                "format": "json",   # 🔥 FORCE JSON
+                "format": "json",
                 "stream": False
             },
             timeout=120
@@ -86,15 +131,9 @@ Return EXACTLY this JSON structure:
         response.raise_for_status()
 
         output = response.json()["message"]["content"]
-
-        # 🔥 LOG TEMPORAIRE (très utile en dev)
         print("LLM RAW OUTPUT:", output)
 
         filters = json.loads(output)
-
-        # ==============================
-        # SAFETY GUARDS
-        # ==============================
 
         if isinstance(filters, str):
             filters = json.loads(filters)
@@ -105,11 +144,7 @@ Return EXACTLY this JSON structure:
         if not isinstance(filters, dict):
             raise ValueError(f"Expected dict, got {type(filters)}")
 
-        # 🔥 fallback intelligent
-        if all(v is None for v in filters.values()):
-            filters["q"] = query
-
-        return filters
+        return sanitize_filters(filters, query)
 
     except json.JSONDecodeError:
         raise ValueError(f"Ollama returned invalid JSON:\n{output}")
@@ -132,7 +167,6 @@ async def nl_search(query: str = Query(..., description="Natural language query"
     try:
         filters = parse_nl_query(query)
 
-        # 🔥 construit la query ES avec ton builder existant
         es_query = build_es_query(**filters)
 
         response = es_request(
