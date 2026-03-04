@@ -29,6 +29,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
     const [isMuted, setIsMuted] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showControls, setShowControls] = useState(true);
+    const [playbackRate, setPlaybackRate] = useState(1);
 
     // Format time in MM:SS
     const formatTime = (time: number) => {
@@ -199,6 +200,22 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
         }
     };
 
+    // Change playback speed
+    const changeSpeed = (rate: number) => {
+        if (videoRef.current) {
+            videoRef.current.playbackRate = rate;
+            setPlaybackRate(rate);
+        }
+    };
+
+    // Frame step (1 frame = 1/25s at 25fps)
+    const frameStep = (frames: number) => {
+        if (videoRef.current) {
+            videoRef.current.pause();
+            videoRef.current.currentTime = Math.max(0, Math.min(duration, videoRef.current.currentTime + frames / 25));
+        }
+    };
+
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -224,12 +241,28 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                 case "f":
                     toggleFullscreen();
                     break;
+                case ",":
+                    e.preventDefault();
+                    frameStep(-1);
+                    break;
+                case ".":
+                    e.preventDefault();
+                    frameStep(1);
+                    break;
+                case "[":
+                    e.preventDefault();
+                    changeSpeed(Math.max(0.25, playbackRate - 0.25));
+                    break;
+                case "]":
+                    e.preventDefault();
+                    changeSpeed(Math.min(4, playbackRate + 0.25));
+                    break;
             }
         };
 
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [isPlaying, duration]);
+    }, [isPlaying, duration, playbackRate]);
 
     // Auto-hide controls
     useEffect(() => {
@@ -494,6 +527,48 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                             <span>{formatTime(duration)}</span>
                         </div>
 
+                        {/* Playback speed selector */}
+                        <div className="flex items-center gap-1">
+                            {[0.5, 1, 1.5, 2].map((rate) => (
+                                <button
+                                    key={rate}
+                                    onClick={() => changeSpeed(rate)}
+                                    className="px-1.5 py-0.5 text-xs font-mono transition-all duration-200"
+                                    style={{
+                                        borderRadius: '4px',
+                                        background: playbackRate === rate ? '#0a84ff' : 'transparent',
+                                        color: playbackRate === rate ? '#fff' : '#86868b',
+                                    }}
+                                >
+                                    {rate}x
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Frame step buttons */}
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => frameStep(-1)}
+                                className="px-1.5 py-0.5 text-xs transition-colors duration-200"
+                                style={{ color: '#86868b' }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = '#86868b'}
+                                title="Frame précédente (,)"
+                            >
+                                ‹ Frame
+                            </button>
+                            <button
+                                onClick={() => frameStep(1)}
+                                className="px-1.5 py-0.5 text-xs transition-colors duration-200"
+                                style={{ color: '#86868b' }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = '#f5f5f7'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = '#86868b'}
+                                title="Frame suivante (.)"
+                            >
+                                Frame ›
+                            </button>
+                        </div>
+
                         <div className="flex-1" />
 
                         {/* Volume - Thin stroke */}
@@ -589,6 +664,25 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                             color: '#f5f5f7',
                         }}
                     >→</kbd> Skip 10s
+                </span>
+                <span>
+                    <kbd
+                        className="px-2 py-1 font-mono"
+                        style={{
+                            background: 'rgba(44, 44, 46, 0.8)',
+                            borderRadius: '6px',
+                            border: '1px solid #3a3a3c',
+                            color: '#f5f5f7',
+                        }}
+                    >,</kbd> <kbd
+                        className="px-2 py-1 font-mono"
+                        style={{
+                            background: 'rgba(44, 44, 46, 0.8)',
+                            borderRadius: '6px',
+                            border: '1px solid #3a3a3c',
+                            color: '#f5f5f7',
+                        }}
+                    >.</kbd> Frame ±1
                 </span>
                 <span>
                     <kbd
