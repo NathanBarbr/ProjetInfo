@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
+import { loadFavorites, upsertFavorite, removeFavorite } from "@/lib/favorites";
+
 
 interface SearchResult {
     id: string;
@@ -19,12 +21,14 @@ interface SearchResult {
     faute_type?: string;
     dernier_coup?: string;
     nb_coups?: number;
+    duree_frames?: number;
     description?: string;
     score_A?: number;
     score_B?: number;
     is_set_point?: boolean;
     is_point_gagnant?: boolean;
     similarity_score?: number;
+    duree_frames?: number;
     [key: string]: any;
 }
 
@@ -54,7 +58,7 @@ interface SearchStats {
     nb_coups: { min: number; max: number; avg: number };
 }
 
-const API_URL = "http://localhost:8000";
+const API_URL = "http://localhost:8001";
 
 function SearchContent() {
     const router = useRouter();
@@ -73,9 +77,12 @@ function SearchContent() {
 
     // Semantic search state
     const [sortMode, setSortMode] = useState<"chronological" | "highlights">("chronological");
+    const [sortOrder, setSortOrder] = useState<string>(searchParams.get("sort") || "chronological");
     const [semanticAvailable, setSemanticAvailable] = useState(false);
     const [recommendations, setRecommendations] = useState<SearchResult[]>([]);
     const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+    const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+
 
     // Filters state
     const [filters, setFilters] = useState({
@@ -153,6 +160,11 @@ function SearchContent() {
         const params = new URLSearchParams(searchParams.toString());
         if (!params.has("page")) params.set("page", "1");
         if (!params.has("size")) params.set("size", "20");
+        if (sortMode === "chronological") {
+            params.set("sort", sortOrder);
+        } else {
+            params.delete("sort");
+        }
 
         try {
             let searchData: SearchResponse;
@@ -179,6 +191,32 @@ function SearchContent() {
                 } else {
                     throw new Error("Highlights API error");
                 }
+            } else if (params.get("q") && semanticAvailable) {
+                // Semantic Search for text query
+                const semanticParams = new URLSearchParams();
+                semanticParams.set("q", params.get("q")!);
+                semanticParams.set("k", params.get("size") || "20");
+                const filtersList = [
+                    "match_id",
+                    "winner",
+                    "serveur",
+                    "set_num",
+                    "faute_type",
+                    "winning_shot",
+                    "service_lateralite",
+                    "service_zone",
+                    "nb_coups_min",
+                    "nb_coups_max"
+                ];
+                filtersList.forEach(f => {
+                    if (params.get(f)) semanticParams.set(f, params.get(f)!);
+                });
+
+                const semanticRes = await fetch(`${API_URL}/api/semantic/search?${semanticParams.toString()}`);
+                if (!semanticRes.ok) {
+                    throw new Error("Semantic Search API error");
+                }
+                searchData = await semanticRes.json();
             } else {
                 // Standard search
                 const searchRes = await fetch(`${API_URL}/api/search?${params.toString()}`);
@@ -197,6 +235,15 @@ function SearchContent() {
             setTotal(searchData.total || 0);
             setPages(searchData.pages || 0);
             if (searchData.message) setMessage(searchData.message);
+
+            // Save queue (for continuous play)
+            if (searchData.points && searchData.points.length > 0 && typeof window !== "undefined") {
+                const queue = searchData.points.map((p) => ({
+                    videoSlug: getSlug(p.match_id),
+                    clipId: getClipId(p)
+                }));
+                localStorage.setItem("pp_queue", JSON.stringify(queue));
+            }
 
             // Fetch recommendations
             const hasFilters = Array.from(params.entries()).some(([key, val]) =>
@@ -240,12 +287,26 @@ function SearchContent() {
         } finally {
             setLoading(false);
         }
-    }, [searchParams, esStatus, sortMode, semanticAvailable, fetchRecommendations]);
+    }, [searchParams, esStatus, sortMode, sortOrder, semanticAvailable, fetchRecommendations]);
 
     // Effect to run search when URL params or sort mode change
     useEffect(() => {
         performSearchAndStats();
     }, [performSearchAndStats]);
+
+    // Load favorites once
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const items = loadFavorites();
+        setFavoriteIds(new Set(items.map((f) => f.id)));
+    }, []);
+
+
+
+    // Keep sortOrder in sync with URL (back/forward navigation)
+    useEffect(() => {
+        setSortOrder(searchParams.get("sort") || "chronological");
+    }, [searchParams]);
 
     // Update URL helper
     const updateUrl = (newParams: Record<string, string>) => {
@@ -269,7 +330,7 @@ function SearchContent() {
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        updateUrl({ q: query, ...filters });
+        updateUrl({ q: query, sort: sortOrder, ...filters });
     };
 
     const handleFilterChange = (key: string, value: string) => {
@@ -282,6 +343,13 @@ function SearchContent() {
         const params = new URLSearchParams(searchParams.toString());
         params.set("page", newPage.toString());
         router.push(`${pathname}?${params.toString()}`);
+    };
+
+
+
+    const handleSortChange = (value: string) => {
+        setSortOrder(value);
+        updateUrl({ sort: value });
     };
 
     // Slug and Clip helpers
@@ -299,6 +367,50 @@ function SearchContent() {
             if (parts.length >= 2) return parts[1];
         }
         return `set_${result.set_num}_point_${result.point_id}`;
+    };
+
+    const toggleFavorite = (result: SearchResult) => {
+        const videoSlug = getSlug(result.match_id);
+        const clipId = getClipId(result);
+        const id = `${videoSlug}_${clipId}`;
+        const item = {
+            id,
+            videoSlug,
+            clipId,
+            title: `Set ${result.set_num} · Point ${result.point_id}`,
+            addedAt: Date.now(),
+        };
+        const updated = favoriteIds.has(id)
+            ? removeFavorite(id)
+            : upsertFavorite(item);
+        setFavoriteIds(new Set(updated.map((f: any) => f.id)));
+    };
+
+    const buildDescription = (result: SearchResult) => {
+        const parts: string[] = [];
+        if (result.set_num !== undefined && result.point_id !== undefined) {
+            parts.push(`Set ${result.set_num} · Point ${result.point_id}`);
+        }
+        if (result.nb_coups !== undefined) {
+            parts.push(`${result.nb_coups} coups`);
+        }
+        if (result.duree_frames !== undefined) {
+            const sec = Math.max(1, Math.round(result.duree_frames / 25));
+            parts.push(`~${sec}s`);
+        }
+        if (result.serveur) {
+            parts.push(`Service ${result.serveur}${result.service_zone ? ` (${result.service_zone})` : ""}${result.service_lateralite ? ` main ${result.service_lateralite.replace("_", " ")}` : ""}`);
+        }
+        if (result.winner) {
+            parts.push(`Point remporté par ${result.winner}${result.is_point_gagnant ? " (gagnant direct)" : ""}`);
+        }
+        if (result.faute_type && result.faute_type !== "pt_gagne") {
+            parts.push(`Fin sur faute : ${result.faute_type}`);
+        }
+        if (result.dernier_coup) {
+            parts.push(`Dernier coup : ${result.dernier_coup}`);
+        }
+        return parts.join(". ") + ".";
     };
 
     // Generate back URL
@@ -327,6 +439,12 @@ function SearchContent() {
                     >
                         {loading ? "..." : "Search"}
                     </button>
+                    <Link
+                        href="/favorites"
+                        className="px-4 py-3 border border-input rounded-lg text-sm text-foreground bg-card hover:bg-muted transition-colors"
+                    >
+                        Favoris
+                    </Link>
                 </div>
 
                 {/* Advanced Filters */}
@@ -450,10 +568,34 @@ function SearchContent() {
                     />
                 </div>
 
+                {/* Sort selector */}
+                <div className="flex flex-wrap items-center gap-3 mt-2">
+                    <label className="text-sm text-muted-foreground">Trier les résultats :</label>
+                    <select
+                        value={sortOrder}
+                        onChange={(e) => handleSortChange(e.target.value)}
+                        disabled={sortMode === "highlights"}
+                        className="px-3 py-2 bg-card border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary disabled:opacity-50"
+                    >
+                        <option value="chronological">Chronologique</option>
+                        <option value="longest">Plus long</option>
+                        <option value="shortest">Plus court</option>
+                        <option value="most_shots">Plus de coups</option>
+                        <option value="least_shots">Moins de coups</option>
+                        <option value="winners">Points gagnants en premier</option>
+                        <option value="errors">Fautes adverses en premier</option>
+                    </select>
+                    {sortMode === "highlights" && (
+                        <span className="text-xs text-amber-500">
+                            Tri désactivé en mode Highlights
+                        </span>
+                    )}
+                </div>
+
                 {/* Sort Mode Selector */}
                 {semanticAvailable && (
-                    <div className="flex items-center gap-4 mt-4">
-                        <span className="text-sm text-muted-foreground">Tri:</span>
+                    <div className="flex items-center gap-4 mt-3">
+                        <span className="text-sm text-muted-foreground">Mode :</span>
                         <div className="flex gap-2">
                             <button
                                 type="button"
@@ -506,9 +648,21 @@ function SearchContent() {
 
             {/* Results count */}
             {total > 0 && (
-                <p className="mb-4 text-sm text-muted-foreground">
-                    Found {total} result{total !== 1 ? "s" : ""}
-                </p>
+                <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground">
+                    <p>
+                        Found {total} result{total !== 1 ? "s" : ""}
+                    </p>
+                    <Link
+                        href={
+                            results.length > 0
+                                ? `/watch/${getSlug(results[0].match_id)}?clip=${getClipId(results[0])}&queue=1&backUrl=${encodeURIComponent(getBackUrl())}`
+                                : "#"
+                        }
+                        className="px-3 py-1 rounded-md border border-input bg-card text-foreground hover:bg-muted transition-colors"
+                    >
+                        Lecture continue
+                    </Link>
+                </div>
             )}
 
             {/* Results Grid - Using grid for better visualization with thumbnails */}
@@ -517,153 +671,114 @@ function SearchContent() {
                     const videoSlug = getSlug(result.match_id);
                     const clipId = getClipId(result);
                     const backUrl = encodeURIComponent(getBackUrl());
+                    const favId = `${videoSlug}_${clipId}`;
+                    const isFav = favoriteIds.has(favId);
 
                     return (
-                        <Link
-                            key={result.id}
-                            href={`/watch/${videoSlug}?clip=${clipId}&backUrl=${backUrl}`}
-                            className="group block"
-                        >
-                            {/* Thumbnail - Seamless, no border */}
-                            <div
-                                className="aspect-video relative overflow-hidden"
-                                style={{ borderRadius: '12px' }}
+                        <div key={result.id} className="group block">
+                            <Link
+                                href={`/watch/${videoSlug}?clip=${clipId}&backUrl=${backUrl}`}
+                                className="block"
                             >
-                                <div
-                                    className="absolute top-2 left-2 z-10 px-2 py-0.5 text-xs font-mono"
-                                    style={{
-                                        background: 'rgba(28, 28, 30, 0.8)',
-                                        backdropFilter: 'blur(8px)',
-                                        WebkitBackdropFilter: 'blur(8px)',
-                                        borderRadius: '6px',
-                                        color: '#f5f5f7',
-                                        fontFamily: "'Playfair Display', Georgia, serif",
-                                    }}
-                                >
-                                    Set {result.set_num} | Pt {result.point_id}
+                                {/* Thumbnail - clean */}
+                                <div className="aspect-video overflow-hidden rounded-xl">
+                                    <img
+                                        src={`${API_URL}/api/videos/${videoSlug}/clips/${clipId}/thumbnail`}
+                                        alt={`Point ${result.point_id}`}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => e.currentTarget.style.display = 'none'}
+                                    />
                                 </div>
 
-                                {/* Badges for special points */}
-                                <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
-                                    {result.is_set_point && (
+                                {/* Info - YouTube style with Roboto */}
+                                <div className="pt-3 pb-4 px-0">
+                                    <div className="flex items-center justify-between mb-1">
                                         <span
-                                            className="px-2 py-0.5 text-xs font-bold"
+                                            className="text-xs font-medium"
                                             style={{
-                                                background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                                                borderRadius: '6px',
-                                                color: '#fff',
+                                                fontFamily: "'Roboto', Arial, sans-serif",
+                                                color: '#f5f5f7',
                                             }}
                                         >
-                                            FIN DE SET
+                                            {result.winner}
                                         </span>
-                                    )}
-                                    {result.is_point_gagnant && (
                                         <span
-                                            className="px-2 py-0.5 text-xs font-medium"
+                                            className="text-xs"
                                             style={{
-                                                background: 'rgba(34, 197, 94, 0.9)',
-                                                borderRadius: '6px',
-                                                color: '#fff',
+                                                fontFamily: "'Roboto', Arial, sans-serif",
+                                                color: '#aaaaaa',
                                             }}
                                         >
-                                            Point gagnant
+                                            {result.nb_coups} shots
+                                            {result.duree_frames ? ` • ~${Math.round(result.duree_frames / 25)}s` : ""}
                                         </span>
-                                    )}
-                                    {sortMode === "highlights" && result.similarity_score && (
-                                        <span
-                                            className="px-2 py-0.5 text-xs font-mono"
-                                            style={{
-                                                background: 'rgba(168, 85, 247, 0.8)',
-                                                borderRadius: '6px',
-                                                color: '#fff',
-                                            }}
-                                        >
-                                            {(result.similarity_score * 100).toFixed(0)}% match
-                                        </span>
-                                    )}
-                                </div>
+                                    </div>
 
-                                <img
-                                    src={`${API_URL}/api/videos/${videoSlug}/clips/${clipId}/thumbnail`}
-                                    alt={`Point ${result.point_id}`}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => e.currentTarget.style.display = 'none'}
-                                />
-                            </div>
-
-                            {/* Info - YouTube style with Roboto */}
-                            <div className="pt-3 pb-4 px-0">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span
-                                        className="text-xs font-medium"
+                                    <div
+                                        className="text-sm mb-1"
                                         style={{
                                             fontFamily: "'Roboto', Arial, sans-serif",
                                             color: '#f5f5f7',
                                         }}
                                     >
-                                        {result.winner}
-                                    </span>
-                                    <span
-                                        className="text-xs"
-                                        style={{
-                                            fontFamily: "'Roboto', Arial, sans-serif",
-                                            color: '#aaaaaa',
-                                        }}
-                                    >
-                                        {result.nb_coups} shots
-                                    </span>
-                                </div>
+                                        <span style={{ color: '#aaaaaa' }}>Service:</span> <span style={{ fontWeight: 500 }}>{result.serveur}</span>
+                                    </div>
 
-                                <div
-                                    className="text-sm mb-1"
-                                    style={{
-                                        fontFamily: "'Roboto', Arial, sans-serif",
-                                        color: '#f5f5f7',
-                                    }}
+                                    {result.faute_type && (
+                                        <div
+                                            className="text-xs"
+                                            style={{
+                                                fontFamily: "'Roboto', Arial, sans-serif",
+                                                color: '#aaaaaa',
+                                            }}
+                                        >
+                                            {result.faute_type === 'pt_gagne' ? 'Winning point' : `Fault: ${result.faute_type}`}
+                                        </div>
+                                    )}
+
+                                    {/* Display last shot if interesting */}
+                                    {result.dernier_coup && (
+                                        <div
+                                            className="text-xs mt-1"
+                                            style={{
+                                                fontFamily: "'Roboto', Arial, sans-serif",
+                                                color: '#aaaaaa',
+                                            }}
+                                        >
+                                            Last shot: {result.dernier_coup}
+                                        </div>
+                                    )}
+
+                                    {/* Score display if available */}
+                                    {(result.score_A !== undefined && result.score_B !== undefined) && (
+                                        <div
+                                            className="mt-2 text-xs pt-2 flex justify-between"
+                                            style={{
+                                                fontFamily: "'Roboto', Arial, sans-serif",
+                                                borderTop: '1px solid #3a3a3c',
+                                                color: '#aaaaaa',
+                                            }}
+                                        >
+                                            <span>Score: {result.score_A} - {result.score_B}</span>
+                                        </div>
+                                    )}
+
+                                </div>
+                            </Link>
+                            <div className="mt-1 flex justify-end">
+                                <button
+                                    onClick={() => toggleFavorite(result)}
+                                    className={`px-3 py-1 text-sm rounded-full border transition-colors flex items-center justify-center ${isFav
+                                        ? "border-amber-400 bg-amber-400/20 text-amber-300"
+                                        : "border-input bg-card text-foreground hover:bg-muted"
+                                        }`}
                                 >
-                                    <span style={{ color: '#aaaaaa' }}>Service:</span> <span style={{ fontWeight: 500 }}>{result.serveur}</span>
-                                </div>
-
-                                {result.faute_type && (
-                                    <div
-                                        className="text-xs"
-                                        style={{
-                                            fontFamily: "'Roboto', Arial, sans-serif",
-                                            color: '#aaaaaa',
-                                        }}
-                                    >
-                                        {result.faute_type === 'pt_gagne' ? 'Winning point' : `Fault: ${result.faute_type}`}
-                                    </div>
-                                )}
-
-                                {/* Display last shot if interesting */}
-                                {result.dernier_coup && (
-                                    <div
-                                        className="text-xs mt-1"
-                                        style={{
-                                            fontFamily: "'Roboto', Arial, sans-serif",
-                                            color: '#aaaaaa',
-                                        }}
-                                    >
-                                        Last shot: {result.dernier_coup}
-                                    </div>
-                                )}
-
-                                {/* Score display if available */}
-                                {(result.score_A !== undefined && result.score_B !== undefined) && (
-                                    <div
-                                        className="mt-2 text-xs pt-2 flex justify-between"
-                                        style={{
-                                            fontFamily: "'Roboto', Arial, sans-serif",
-                                            borderTop: '1px solid #3a3a3c',
-                                            color: '#aaaaaa',
-                                        }}
-                                    >
-                                        <span>Score: {result.score_A} - {result.score_B}</span>
-                                    </div>
-                                )}
+                                    <span style={{ color: isFav ? '#fbbf24' : '#f5f5f7', fontSize: '14px' }}>
+                                        {isFav ? "♥" : "♡"}
+                                    </span>
+                                </button>
                             </div>
-                        </Link>
+                        </div>
                     );
                 })}
             </div>
@@ -737,6 +852,7 @@ function SearchContent() {
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     {rec.nb_coups} shots
+                                                    {rec.duree_frames ? ` • ~${Math.round(rec.duree_frames / 25)}s` : ""}
                                                 </span>
                                             </div>
                                         </div>
@@ -746,31 +862,34 @@ function SearchContent() {
                         </div>
                     )}
                 </div>
-            )}
+            )
+            }
 
             {/* Pagination */}
-            {pages > 1 && (
-                <div className="mt-8 flex items-center justify-center gap-2">
-                    <button
-                        onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 bg-card hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm rounded border border-input transition-colors"
-                    >
-                        Previous
-                    </button>
-                    <span className="text-sm text-muted-foreground">
-                        Page {currentPage} of {pages}
-                    </span>
-                    <button
-                        onClick={() => handlePageChange(Math.min(pages, currentPage + 1))}
-                        disabled={currentPage === pages}
-                        className="px-3 py-1 bg-card hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm rounded border border-input transition-colors"
-                    >
-                        Next
-                    </button>
-                </div>
-            )}
-        </main>
+            {
+                pages > 1 && (
+                    <div className="mt-8 flex items-center justify-center gap-2">
+                        <button
+                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1 bg-card hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm rounded border border-input transition-colors"
+                        >
+                            Previous
+                        </button>
+                        <span className="text-sm text-muted-foreground">
+                            Page {currentPage} of {pages}
+                        </span>
+                        <button
+                            onClick={() => handlePageChange(Math.min(pages, currentPage + 1))}
+                            disabled={currentPage === pages}
+                            className="px-3 py-1 bg-card hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm rounded border border-input transition-colors"
+                        >
+                            Next
+                        </button>
+                    </div>
+                )
+            }
+        </main >
     );
 }
 
