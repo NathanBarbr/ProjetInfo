@@ -28,9 +28,10 @@ interface Props {
     matchId: string;
     apiUrl: string;
     currentPointId?: number;
+    onPointSelect?: (point: MomentumPoint) => void;
 }
 
-export default function MomentumChart({ matchId, apiUrl, currentPointId }: Props) {
+export default function MomentumChart({ matchId, apiUrl, currentPointId, onPointSelect }: Props) {
     const [data, setData] = useState<MomentumData | null>(null);
     const [loading, setLoading] = useState(false);
     const [hovered, setHovered] = useState<number | null>(null);
@@ -129,7 +130,7 @@ export default function MomentumChart({ matchId, apiUrl, currentPointId }: Props
             <svg
                 viewBox={`0 0 ${W} ${H}`}
                 className="w-full"
-                style={{ cursor: "crosshair" }}
+                style={{ cursor: onPointSelect ? "pointer" : "crosshair" }}
                 onMouseMove={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const svgX = ((e.clientX - rect.left) / rect.width) * W;
@@ -137,6 +138,15 @@ export default function MomentumChart({ matchId, apiUrl, currentPointId }: Props
                     if (idx >= 0 && idx < points.length) setHovered(idx);
                 }}
                 onMouseLeave={() => setHovered(null)}
+                onClick={(e) => {
+                    if (!onPointSelect) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const svgX = ((e.clientX - rect.left) / rect.width) * W;
+                    const idx = Math.round(((svgX - padX) / chartW) * (points.length - 1));
+                    if (idx >= 0 && idx < points.length) {
+                        onPointSelect(points[idx]);
+                    }
+                }}
             >
                 <defs>
                     <linearGradient id="momentumGradAbove" x1="0" y1="0" x2="0" y2="1">

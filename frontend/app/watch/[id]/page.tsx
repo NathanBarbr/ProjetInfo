@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import VideoPlayer from "@/components/VideoPlayer";
@@ -81,6 +81,10 @@ export default function WatchPage() {
     const [queue, setQueue] = useState<{ videoSlug: string; clipId: string }[]>([]);
     const [autoNext, setAutoNext] = useState(false);
     const [skipSeconds, setSkipSeconds] = useState(1);
+    const videoWrapRef = useRef<HTMLDivElement>(null);
+    const [isMiniPlayer, setIsMiniPlayer] = useState(false);
+    const [miniPlayerDismissed, setMiniPlayerDismissed] = useState(false);
+    const [videoHeight, setVideoHeight] = useState<number | null>(null);
 
     // Fetch video metadata
     useEffect(() => {
@@ -274,6 +278,42 @@ export default function WatchPage() {
         return () => clearTimeout(timer);
     }, [autoNext, queue, currentClip, pointDetail, skipSeconds]);
 
+    useEffect(() => {
+        const hasStats = Boolean(currentClip);
+        if (typeof window === "undefined" || !hasStats) {
+            setIsMiniPlayer(false);
+            return;
+        }
+
+        const updateHeight = () => {
+            if (videoWrapRef.current) {
+                setVideoHeight(videoWrapRef.current.offsetHeight);
+            }
+        };
+
+        const onScroll = () => {
+            if (!videoWrapRef.current) return;
+            const rect = videoWrapRef.current.getBoundingClientRect();
+            const shouldMini = rect.bottom < 12;
+            setIsMiniPlayer(shouldMini);
+        };
+
+        updateHeight();
+        onScroll();
+        window.addEventListener("scroll", onScroll, { passive: true });
+        window.addEventListener("resize", updateHeight);
+        return () => {
+            window.removeEventListener("scroll", onScroll);
+            window.removeEventListener("resize", updateHeight);
+        };
+    }, [currentClip]);
+
+    useEffect(() => {
+        if (!isMiniPlayer) {
+            setMiniPlayerDismissed(false);
+        }
+    }, [isMiniPlayer]);
+
 
     const buildDescription = () => {
         const p = pointDetail;
@@ -290,6 +330,14 @@ export default function WatchPage() {
         if (p.dernier_coup) parts.push(`Dernier coup : ${p.dernier_coup}`);
         if (p.is_set_point) parts.push("Balle de set");
         return parts.join(". ") + ".";
+    };
+
+    const handleMomentumPointSelect = (pointId: number, setNum: number) => {
+        const clipId = `set_${setNum}_point_${pointId}`;
+        setCurrentClip(clipId);
+        const newParams = new URLSearchParams(window.location.search);
+        newParams.set("clip", clipId);
+        window.history.pushState({}, "", `/watch/${videoId}?${newParams.toString()}`);
     };
 
     return (
@@ -383,15 +431,6 @@ export default function WatchPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <button
-                            onClick={toggleFavorite}
-                            className={`px-3 py-2 text-sm rounded-lg border transition-colors ${isFavorite
-                                ? "border-amber-400 bg-amber-400 text-black"
-                                : "border-input bg-card text-foreground hover:bg-muted"
-                                }`}
-                        >
-                            {isFavorite ? "★ Favori" : "☆ Ajouter aux favoris"}
-                        </button>
 
                         {queue.length > 0 && (
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -475,12 +514,64 @@ export default function WatchPage() {
                         <div className="flex flex-col lg:flex-row gap-8">
                             {/* Video player - takes remaining space */}
                             <div className="flex-1 min-w-0">
-                                <VideoPlayer
-                                    key={currentClip || "main"} // Force remount when clip changes
-                                    src={getVideoSrc()}
-                                    title={getCurrentTitle()}
-                                    description={currentClip ? undefined : meta?.description}
-                                />
+                                <div
+                                    ref={videoWrapRef}
+                                    style={isMiniPlayer && videoHeight ? { height: videoHeight } : undefined}
+                                >
+                                    <div
+                                        className={
+                                            isMiniPlayer && !miniPlayerDismissed
+                                                ? "fixed bottom-6 right-6 z-50 w-[420px] md:w-[480px] max-w-[92vw] shadow-2xl"
+                                                : ""
+                                        }
+                                        style={isMiniPlayer && !miniPlayerDismissed ? { background: "#000", borderRadius: 12, border: "1px solid #3a3a3c", overflow: "hidden" } : undefined}
+                                    >
+                                        {isMiniPlayer && !miniPlayerDismissed && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setMiniPlayerDismissed(true)}
+                                                className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center"
+                                                style={{ background: "rgba(28, 28, 30, 0.7)", border: "1px solid #3a3a3c", color: "#f5f5f7" }}
+                                                aria-label="Fermer le mini lecteur"
+                                            >
+                                                ×
+                                            </button>
+                                        )}
+                                        <VideoPlayer
+                                            key={currentClip || "main"} // Force remount when clip changes
+                                            src={getVideoSrc()}
+                                            title={getCurrentTitle()}
+                                            description={currentClip ? undefined : meta?.description}
+                                            minimalUi={isMiniPlayer && !miniPlayerDismissed}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 flex items-center gap-3">
+                                    <button
+                                        onClick={toggleFavorite}
+                                        className={`flex items-center gap-2 px-4 py-2 text-sm rounded-full border transition-colors ${isFavorite
+                                            ? "border-amber-400 bg-amber-400 text-black"
+                                            : "border-input bg-card text-foreground hover:bg-muted"
+                                            }`}
+                                    >
+                                        <svg
+                                            className="w-4 h-4"
+                                            viewBox="0 0 24 24"
+                                            fill={isFavorite ? "currentColor" : "none"}
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M12 17.27l5.18 3.14-1.4-5.98L20 9.24l-6.18-.52L12 3l-1.82 5.72L4 9.24l4.22 5.19-1.4 5.98L12 17.27z"
+                                            />
+                                        </svg>
+                                        <span>{isFavorite ? "Favori" : "Ajouter"}</span>
+                                    </button>
+                                </div>
+
 
                                 {/* Description */}
                                 {currentClip && (
@@ -577,6 +668,7 @@ export default function WatchPage() {
                                 matchId={pointDetail.match_id}
                                 apiUrl={SEARCH_API_URL}
                                 currentPointId={pointDetail.point_id}
+                                onPointSelect={(point) => handleMomentumPointSelect(point.point_id, point.set_num)}
                             />
                             <div className="mt-3 text-center">
                                 <Link

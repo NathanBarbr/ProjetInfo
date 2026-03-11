@@ -6,13 +6,14 @@ interface VideoPlayerProps {
     src: string;
     title?: string;
     description?: string;
+    minimalUi?: boolean;
 }
 
 /**
  * VideoPlayer component - Custom HTML5 video player
  * Modern Luxury Editorial design - Midjourney / Apple Dark inspired
  */
-export default function VideoPlayer({ src, title, description }: VideoPlayerProps) {
+export default function VideoPlayer({ src, title, description, minimalUi = false }: VideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const progressRef = useRef<HTMLDivElement>(null);
     const playPromiseRef = useRef<Promise<void> | null>(null);
@@ -114,7 +115,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
             }
             playPromiseRef.current = null;
         }
-    }, [isPlaying]);
+    }, [isPlaying, minimalUi]);
 
     // Handle play/pause events
     const handlePlay = () => setIsPlaying(true);
@@ -139,6 +140,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
 
     // Handle mouse move during seek
     useEffect(() => {
+        if (minimalUi) return;
         const handleMouseMove = (e: MouseEvent) => {
             if (isSeeking && progressRef.current && videoRef.current) {
                 const rect = progressRef.current.getBoundingClientRect();
@@ -162,7 +164,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
             document.removeEventListener("mousemove", handleMouseMove);
             document.removeEventListener("mouseup", handleMouseUp);
         };
-    }, [isSeeking, duration]);
+    }, [isSeeking, duration, minimalUi]);
 
     // Toggle mute
     const toggleMute = () => {
@@ -218,6 +220,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
 
     // Keyboard shortcuts
     useEffect(() => {
+        if (minimalUi) return;
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement) return;
 
@@ -262,10 +265,11 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
 
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [isPlaying, duration, playbackRate]);
+    }, [isPlaying, duration, playbackRate, minimalUi]);
 
     // Auto-hide controls
     useEffect(() => {
+        if (minimalUi) return;
         let timeout: NodeJS.Timeout;
 
         const handleMouseMove = () => {
@@ -283,7 +287,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
             container?.removeEventListener("mousemove", handleMouseMove);
             clearTimeout(timeout);
         };
-    }, [isPlaying]);
+    }, [isPlaying, minimalUi]);
 
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
     const bufferedProgress = duration > 0 ? (buffered / duration) * 100 : 0;
@@ -300,7 +304,9 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                     WebkitBackdropFilter: 'blur(15px)',
                     border: '1px solid #3a3a3c',
                 }}
-                onMouseEnter={() => setShowControls(true)}
+                onMouseEnter={() => {
+                    if (!minimalUi) setShowControls(true);
+                }}
             >
                 {/* Video element */}
                 <video
@@ -325,7 +331,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                 </video>
 
                 {/* Loading/Buffering indicator - Refined */}
-                {(isLoading || isBuffering) && (
+                {!minimalUi && (isLoading || isBuffering) && (
                     <div
                         className="absolute inset-0 flex items-center justify-center"
                         style={{ background: 'rgba(28, 28, 30, 0.6)' }}
@@ -386,7 +392,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                 )}
 
                 {/* Play overlay (center button) - Refined */}
-                {!isPlaying && !isLoading && !isBuffering && (
+                {!minimalUi && !isPlaying && !isLoading && !isBuffering && (
                     <div
                         className="absolute inset-0 flex items-center justify-center cursor-pointer"
                         style={{ background: 'rgba(28, 28, 30, 0.3)' }}
@@ -416,7 +422,8 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                 )}
 
                 {/* Controls overlay - Glass effect */}
-                <div
+                {!minimalUi && (
+                    <div
                     className={`absolute bottom-0 left-0 right-0 px-5 pb-5 pt-20 transition-opacity duration-300 ${showControls || !isPlaying ? "opacity-100" : "opacity-0"}`}
                     style={{
                         background: 'linear-gradient(to top, rgba(28, 28, 30, 0.95) 0%, rgba(28, 28, 30, 0.6) 50%, transparent 100%)',
@@ -625,10 +632,12 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                         </button>
                     </div>
                 </div>
+                )}
             </div>
 
             {/* Keyboard shortcuts hint - Refined styling */}
-            <div
+            {!minimalUi && (
+                <div
                 className="mt-5 flex items-center justify-center gap-8 text-xs"
                 style={{
                     fontFamily: "'Inter', sans-serif",
@@ -696,9 +705,10 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
                     >F</kbd> Fullscreen
                 </span>
             </div>
+            )}
 
             {/* Metadata section - Editorial typography */}
-            {(title || description) && (
+            {!minimalUi && (title || description) && (
                 <div className="mt-8 space-y-3">
                     {title && (
                         <h2
