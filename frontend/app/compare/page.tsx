@@ -132,62 +132,83 @@ function buildFromPoints(matchId: string, points: any[]): CompareData | null {
         player_B: statB,
     };
 }
-// Stat bar that shows two players side by side
+// Stat bar that shows two players side by side — interactive
 function DualBar({ label, valA, valB, maxVal, colorA, colorB }: {
     label: string; valA: number; valB: number; maxVal: number;
     colorA: string; colorB: string;
 }) {
+    const [hover, setHover] = useState(false);
     const pctA = maxVal > 0 ? (valA / maxVal) * 100 : 0;
     const pctB = maxVal > 0 ? (valB / maxVal) * 100 : 0;
+    const diff = valA - valB;
+    const diffLabel = diff > 0 ? `+${diff}` : `${diff}`;
 
     return (
-        <div className="flex items-center gap-3 py-2">
+        <div className="flex items-center gap-3 py-2 px-2 rounded-lg transition-colors"
+            style={{ background: hover ? "rgba(58,58,60,0.4)" : "transparent" }}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
             {/* Player A value */}
-            <span className="text-sm font-semibold w-10 text-right" style={{ color: colorA, fontFamily: "'Playfair Display', serif" }}>
+            <span className="text-sm font-semibold w-12 text-right" style={{ color: colorA, fontFamily: "'Playfair Display', serif" }}>
                 {valA}
             </span>
             {/* Bars */}
-            <div className="flex-1 flex gap-0.5">
+            <div className="flex-1 flex gap-0.5 relative">
                 {/* A bar (right-aligned) */}
                 <div className="flex-1 h-5 rounded-l-md overflow-hidden flex justify-end" style={{ background: "#2c2c2e" }}>
                     <div className="h-full rounded-l-md" style={{
                         width: `${pctA}%`, background: colorA,
-                        transition: "width 1s ease"
+                        opacity: hover ? 1 : 0.8,
+                        transition: "width 1s ease, opacity 0.2s"
                     }} />
                 </div>
                 {/* B bar (left-aligned) */}
                 <div className="flex-1 h-5 rounded-r-md overflow-hidden" style={{ background: "#2c2c2e" }}>
                     <div className="h-full rounded-r-md" style={{
                         width: `${pctB}%`, background: colorB,
-                        transition: "width 1s ease"
+                        opacity: hover ? 1 : 0.8,
+                        transition: "width 1s ease, opacity 0.2s"
                     }} />
                 </div>
+                {/* Diff badge on hover */}
+                {hover && diff !== 0 && (
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-5 px-2 py-0.5 rounded text-[9px] font-bold"
+                        style={{
+                            background: diff > 0 ? colorA : colorB,
+                            color: "#fff",
+                        }}>
+                        {diffLabel}
+                    </div>
+                )}
             </div>
             {/* Player B value */}
-            <span className="text-sm font-semibold w-10" style={{ color: colorB, fontFamily: "'Playfair Display', serif" }}>
+            <span className="text-sm font-semibold w-12" style={{ color: colorB, fontFamily: "'Playfair Display', serif" }}>
                 {valB}
             </span>
             {/* Label */}
-            <span className="text-[11px] w-28" style={{ color: "#86868b", fontFamily: "'Inter', sans-serif" }}>
+            <span className="text-[11px] w-28" style={{ color: hover ? "#f5f5f7" : "#86868b", fontFamily: "'Inter', sans-serif", transition: "color 0.2s" }}>
                 {label}
             </span>
         </div>
     );
 }
 
-// Radar chart for player styles
+// Radar chart for player styles — interactive
 function RadarChart({ statsA, statsB, playerA, playerB }: {
     statsA: PlayerStats; statsB: PlayerStats; playerA: string; playerB: string;
 }) {
+    const [hovered, setHovered] = useState<number | null>(null);
+
     const axes = [
-        { label: "Win%", a: statsA.win_rate, b: statsB.win_rate, max: 100 },
-        { label: "Svc Win%", a: statsA.service_win_rate, b: statsB.service_win_rate, max: 100 },
-        { label: "Rcv Win%", a: statsA.receive_win_rate, b: statsB.receive_win_rate, max: 100 },
-        { label: "Rally Len", a: statsA.avg_service_rally, b: statsB.avg_service_rally, max: Math.max(statsA.avg_service_rally, statsB.avg_service_rally, 1) },
-        { label: "Pts Won", a: statsA.points_won, b: statsB.points_won, max: Math.max(statsA.points_won, statsB.points_won, 1) },
+        { label: "Win%", a: statsA.win_rate, b: statsB.win_rate, max: 100, unit: "%" },
+        { label: "Svc Win%", a: statsA.service_win_rate, b: statsB.service_win_rate, max: 100, unit: "%" },
+        { label: "Rcv Win%", a: statsA.receive_win_rate, b: statsB.receive_win_rate, max: 100, unit: "%" },
+        { label: "Rally moy.", a: statsA.avg_service_rally, b: statsB.avg_service_rally, max: Math.max(statsA.avg_service_rally, statsB.avg_service_rally, 1), unit: "" },
+        { label: "Pts Won", a: statsA.points_won, b: statsB.points_won, max: Math.max(statsA.points_won, statsB.points_won, 1), unit: "" },
     ];
 
-    const cx = 150, cy = 130, maxR = 90;
+    const cx = 150, cy = 140, maxR = 95;
     const n = axes.length;
 
     const getPoint = (index: number, val: number, max: number) => {
@@ -211,29 +232,47 @@ function RadarChart({ statsA, statsB, playerA, playerB }: {
             <h4 className="text-xs font-semibold mb-3" style={{ color: "#f5f5f7", fontFamily: "'Inter', sans-serif" }}>
                 Profil de jeu
             </h4>
-            <svg viewBox="0 0 300 280" className="w-full" style={{ maxWidth: 350 }}>
-                {/* Grid rings */}
+            <svg viewBox="0 0 300 300" className="w-full" style={{ maxWidth: 380 }}>
+                {/* Grid rings with % labels */}
                 {[0.25, 0.5, 0.75, 1].map(pct => {
                     const r = maxR * pct;
                     const gridPoints = axes.map((_, i) => {
                         const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
                         return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
                     }).join(" ");
-                    return <polygon key={pct} points={gridPoints} fill="none" stroke="#3a3a3c" strokeWidth={0.5} />;
+                    return (
+                        <g key={pct}>
+                            <polygon points={gridPoints} fill="none" stroke="#3a3a3c" strokeWidth={0.5} />
+                            <text x={cx + 4} y={cy - r + 3} fill="#555" style={{ fontSize: "7px", fontFamily: "'Inter', sans-serif" }}>
+                                {Math.round(pct * 100)}%
+                            </text>
+                        </g>
+                    );
                 })}
 
-                {/* Axis lines + labels */}
+                {/* Axis lines + labels (clickable zones) */}
                 {axes.map((ax, i) => {
                     const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
                     const endX = cx + (maxR + 8) * Math.cos(angle);
                     const endY = cy + (maxR + 8) * Math.sin(angle);
-                    const labelX = cx + (maxR + 22) * Math.cos(angle);
-                    const labelY = cy + (maxR + 22) * Math.sin(angle);
+                    const labelX = cx + (maxR + 24) * Math.cos(angle);
+                    const labelY = cy + (maxR + 24) * Math.sin(angle);
+                    const isHovered = hovered === i;
                     return (
-                        <g key={i}>
-                            <line x1={cx} y1={cy} x2={endX} y2={endY} stroke="#3a3a3c" strokeWidth={0.5} />
-                            <text x={labelX} y={labelY + 3} textAnchor="middle" fill="#86868b"
-                                style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
+                        <g key={i}
+                            onMouseEnter={() => setHovered(i)}
+                            onMouseLeave={() => setHovered(null)}
+                            style={{ cursor: "pointer" }}
+                        >
+                            {/* Invisible wider hit area */}
+                            <line x1={cx} y1={cy} x2={endX} y2={endY}
+                                stroke="transparent" strokeWidth={16} />
+                            <line x1={cx} y1={cy} x2={endX} y2={endY}
+                                stroke={isHovered ? "#f5f5f7" : "#3a3a3c"} strokeWidth={isHovered ? 1 : 0.5}
+                                style={{ transition: "stroke 0.2s" }} />
+                            <text x={labelX} y={labelY + 3} textAnchor="middle"
+                                fill={isHovered ? "#f5f5f7" : "#86868b"}
+                                style={{ fontSize: isHovered ? "9px" : "8px", fontFamily: "'Inter', sans-serif", fontWeight: isHovered ? 600 : 400, transition: "all 0.2s" }}>
                                 {ax.label}
                             </text>
                         </g>
@@ -244,17 +283,60 @@ function RadarChart({ statsA, statsB, playerA, playerB }: {
                 <polygon points={polyA} fill="rgba(48, 209, 88, 0.15)" stroke="#30d158" strokeWidth={2} />
                 <polygon points={polyB} fill="rgba(255, 69, 58, 0.15)" stroke="#ff453a" strokeWidth={2} />
 
-                {/* Dots */}
+                {/* Dots + value labels */}
                 {axes.map((ax, i) => {
                     const ptA = getPoint(i, ax.a, ax.max);
                     const ptB = getPoint(i, ax.b, ax.max);
+                    const isHovered = hovered === i;
+                    const rDot = isHovered ? 6 : 3;
                     return (
-                        <g key={`dots-${i}`}>
-                            <circle cx={ptA.x} cy={ptA.y} r={3} fill="#30d158" />
-                            <circle cx={ptB.x} cy={ptB.y} r={3} fill="#ff453a" />
+                        <g key={`dots-${i}`}
+                            onMouseEnter={() => setHovered(i)}
+                            onMouseLeave={() => setHovered(null)}
+                            style={{ cursor: "pointer" }}
+                        >
+                            <circle cx={ptA.x} cy={ptA.y} r={rDot} fill="#30d158"
+                                stroke={isHovered ? "#fff" : "none"} strokeWidth={2}
+                                style={{ transition: "r 0.2s, stroke 0.2s" }} />
+                            <circle cx={ptB.x} cy={ptB.y} r={rDot} fill="#ff453a"
+                                stroke={isHovered ? "#fff" : "none"} strokeWidth={2}
+                                style={{ transition: "r 0.2s, stroke 0.2s" }} />
+
+                            {/* Value labels on hover */}
+                            {isHovered && (
+                                <>
+                                    <rect x={ptA.x - 22} y={ptA.y - 20} width={44} height={16} rx={4}
+                                        fill="rgba(48, 209, 88, 0.9)" />
+                                    <text x={ptA.x} y={ptA.y - 9} textAnchor="middle" fill="#fff"
+                                        style={{ fontSize: "9px", fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>
+                                        {ax.a}{ax.unit}
+                                    </text>
+                                    <rect x={ptB.x - 22} y={ptB.y + 6} width={44} height={16} rx={4}
+                                        fill="rgba(255, 69, 58, 0.9)" />
+                                    <text x={ptB.x} y={ptB.y + 17} textAnchor="middle" fill="#fff"
+                                        style={{ fontSize: "9px", fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>
+                                        {ax.b}{ax.unit}
+                                    </text>
+                                </>
+                            )}
                         </g>
                     );
                 })}
+
+                {/* Tooltip panel when axis is hovered */}
+                {hovered !== null && (
+                    <g>
+                        <rect x={10} y={268} width={280} height={24} rx={6}
+                            fill="rgba(28,28,30,0.95)" stroke="#3a3a3c" />
+                        <text x={150} y={283} textAnchor="middle" fill="#f5f5f7"
+                            style={{ fontSize: "9px", fontFamily: "'Inter', sans-serif" }}>
+                            {axes[hovered].label} —{" "}
+                            <tspan fill="#30d158" fontWeight={700}>{playerA.split("-").pop()}: {axes[hovered].a}{axes[hovered].unit}</tspan>
+                            {"  vs  "}
+                            <tspan fill="#ff453a" fontWeight={700}>{playerB.split("-").pop()}: {axes[hovered].b}{axes[hovered].unit}</tspan>
+                        </text>
+                    </g>
+                )}
             </svg>
         </div>
     );
