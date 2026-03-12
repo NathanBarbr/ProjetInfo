@@ -61,6 +61,45 @@ class TestSearchEndpoint:
         
         data = response.json()
         assert data["total"] == 2
+
+    def test_llm_search_merges_parsed_and_explicit_filters(self, client, mock_es_available, monkeypatch, sample_search_result):
+        """Test LLM search endpoint with parsed filters and explicit override."""
+        import routers.search as search_module
+
+        monkeypatch.setattr(search_module, "OPENAI_API_KEY", "test-key")
+
+        def mock_parse_llm_query(query_text):
+            assert query_text == "montre moi les longs echanges"
+            return search_module.LlmSearchPlan.model_validate({
+                "filters": {
+                    "winner": "Player A",
+                    "nb_coups_min": 5
+                },
+                "sort": "longest",
+                "reasoning": "Long exchanges imply at least 5 shots."
+            })
+
+        def mock_es_request(method, path, body=None):
+            if body and "query" in body:
+                query = body["query"]
+                assert {"term": {"winner": "Player B"}} in query["bool"]["filter"]
+                assert any(
+                    filt.get("range", {}).get("nb_coups", {}).get("gte") == 5
+                    for filt in query["bool"]["filter"]
+                )
+            return sample_search_result
+
+        monkeypatch.setattr(search_module, "parse_llm_search_query", mock_parse_llm_query)
+        monkeypatch.setattr(search_module, "es_request", mock_es_request)
+
+        response = client.get("/api/search/llm-search?q=montre%20moi%20les%20longs%20echanges&winner=Player%20B")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["mode"] == "llm"
+        assert data["applied_filters"]["winner"] == "Player B"
+        assert data["applied_filters"]["nb_coups_min"] == 5
+        assert data["applied_sort"] == "longest"
         assert data["page"] == 1
         assert data["size"] == 20
         assert len(data["points"]) == 2

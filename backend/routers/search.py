@@ -4,16 +4,48 @@ Search router - Elasticsearch integration for point search
 
 import os
 import json
-from typing import Optional
+from typing import Any, Dict, Optional
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 # Elasticsearch configuration
 ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 ES_INDEX = "pingpong_points"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+
+class LlmFilterPayload(BaseModel):
+    match_id: Optional[str] = None
+    player: Optional[str] = None
+    winner: Optional[str] = None
+    serveur: Optional[str] = None
+    set_num: Optional[int] = Field(default=None, ge=1, le=7)
+    nb_coups_min: Optional[int] = Field(default=None, ge=0)
+    nb_coups_max: Optional[int] = Field(default=None, ge=0)
+    duree_min: Optional[int] = Field(default=None, ge=0)
+    duree_max: Optional[int] = Field(default=None, ge=0)
+    effet: Optional[str] = None
+    lateralite: Optional[str] = None
+    faute_type: Optional[str] = None
+    winning_shot: Optional[str] = None
+    winning_shot_status: Optional[str] = Field(default=None, pattern="^(winner|error)$")
+    zone: Optional[str] = None
+    service_zone: Optional[str] = None
+    service_lateralite: Optional[str] = None
+
+
+class LlmSearchPlan(BaseModel):
+    filters: LlmFilterPayload = Field(default_factory=LlmFilterPayload)
+    sort: Optional[str] = Field(
+        default=None,
+        pattern="^(chronological|longest|shortest|most_shots|least_shots|winners|errors)$"
+    )
+    reasoning: Optional[str] = None
 
 
 def es_request(method: str, path: str, body: dict = None) -> dict:
@@ -57,6 +89,158 @@ def check_index_exists() -> bool:
         if "404" in str(e):
             return False
         return True
+
+
+def extract_json_object(content: str) -> dict:
+    """Extract a JSON object from a model response."""
+    text = content.strip()
+    if text.startswith("```"):
+        lines = [line for line in text.splitlines() if not line.strip().startswith("```")]
+        text = "\n".join(lines).strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("No JSON object found in model response")
+
+    return json.loads(text[start:end + 1])
+
+
+def get_openai_client():
+    """Create the OpenAI client lazily."""
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
+
+    import openai
+
+    return openai.OpenAI(api_key=OPENAI_API_KEY)
+
+
+def parse_llm_search_query(query_text: str) -> LlmSearchPlan:
+    """Convert a natural-language query into deterministic filters."""
+    client = get_openai_client()
+
+    system_prompt = """
+You convert a French or English ping-pong search request into deterministic search filters.
+
+Return only one JSON object with this shape:
+{
+  "filters": {
+    "match_id": string|null,
+    "player": string|null,
+    "winner": string|null,
+    "serveur": string|null,
+    "set_num": integer|null,
+    "nb_coups_min": integer|null,
+    "nb_coups_max": integer|null,
+    "duree_min": integer|null,
+    "duree_max": integer|null,
+    "effet": string|null,
+    "lateralite": string|null,
+    "faute_type": string|null,
+    "winning_shot": string|null,
+    "winning_shot_status": "winner"|"error"|null,
+    "zone": string|null,
+    "service_zone": string|null,
+    "service_lateralite": string|null
+  },
+  "sort": "chronological"|"longest"|"shortest"|"most_shots"|"least_shots"|"winners"|"errors"|null,
+  "reasoning": string|null
+}
+
+Rules:
+- Do not invent values.
+- Use null when the request does not clearly specify a filter.
+- "long exchange", "rally", "long point" usually means nb_coups_min around 5 or more.
+- Durations must be returned in frames, assuming 25 frames per second.
+- "winner"/"winning point" means faute_type = "pt_gagne" or winning_shot_status = "winner" if relevant.
+- Return valid JSON only, no markdown.
+""".strip()
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query_text.strip()},
+        ],
+    )
+
+    content = response.choices[0].message.content or "{}"
+    payload = extract_json_object(content)
+    return LlmSearchPlan.model_validate(payload)
+
+
+def execute_search(query: dict, sort: str, page: int, size: int) -> dict:
+    """Execute an Elasticsearch search and format the shared response shape."""
+    from_offset = (page - 1) * size
+
+    sort_clauses = [{"match_id": "asc"}, {"point_id": "asc"}]
+    if sort == "longest":
+        sort_clauses = [{"duree_frames": {"order": "desc", "missing": "_last"}}, *sort_clauses]
+    elif sort == "shortest":
+        sort_clauses = [{"duree_frames": {"order": "asc", "missing": "_last"}}, *sort_clauses]
+    elif sort == "most_shots":
+        sort_clauses = [{"nb_coups": {"order": "desc", "missing": "_last"}}, *sort_clauses]
+    elif sort == "least_shots":
+        sort_clauses = [{"nb_coups": {"order": "asc", "missing": "_last"}}, *sort_clauses]
+    elif sort == "winners":
+        sort_clauses = [
+            {
+                "_script": {
+                    "type": "number",
+                    "order": "desc",
+                    "script": {
+                        "lang": "painless",
+                        "source": "return doc.containsKey('faute_type') && !doc['faute_type'].empty && doc['faute_type'].value == 'pt_gagne' ? 1 : 0;"
+                    }
+                }
+            },
+            *sort_clauses
+        ]
+    elif sort == "errors":
+        sort_clauses = [
+            {
+                "_script": {
+                    "type": "number",
+                    "order": "desc",
+                    "script": {
+                        "lang": "painless",
+                        "source": "return doc.containsKey('faute_type') && !doc['faute_type'].empty && doc['faute_type'].value != 'pt_gagne' ? 1 : 0;"
+                    }
+                }
+            },
+            *sort_clauses
+        ]
+
+    search_body = {
+        "query": query,
+        "from": from_offset,
+        "size": size,
+        "sort": sort_clauses
+    }
+
+    response = es_request("POST", f"/{ES_INDEX}/_search", search_body)
+    hits = response.get("hits", {})
+    total = hits.get("total", {}).get("value", 0)
+    points = [{"id": hit["_id"], **hit["_source"]} for hit in hits.get("hits", [])]
+
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": (total + size - 1) // size if total > 0 else 0,
+        "points": points
+    }
+
+
+def compact_filters(filters: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove unset values from a filter dict."""
+    return {
+        key: value
+        for key, value in filters.items()
+        if value is not None and value != ""
+    }
 
 
 def build_es_query(
@@ -201,6 +385,10 @@ async def get_search_status():
             "host": ES_HOST,
             "index": ES_INDEX,
             "index_info": index_info
+        },
+        "llm": {
+            "available": bool(OPENAI_API_KEY),
+            "model": OPENAI_MODEL if OPENAI_API_KEY else None
         }
     }
 
@@ -255,70 +443,10 @@ async def search_points(
         zone, service_zone, service_lateralite, q
     )
     
-    from_offset = (page - 1) * size
-
-    # Build sort clauses
-    sort_clauses = [{"match_id": "asc"}, {"point_id": "asc"}]
-    if sort == "longest":
-        sort_clauses = [{"duree_frames": {"order": "desc", "missing": "_last"}}, *sort_clauses]
-    elif sort == "shortest":
-        sort_clauses = [{"duree_frames": {"order": "asc", "missing": "_last"}}, *sort_clauses]
-    elif sort == "most_shots":
-        sort_clauses = [{"nb_coups": {"order": "desc", "missing": "_last"}}, *sort_clauses]
-    elif sort == "least_shots":
-        sort_clauses = [{"nb_coups": {"order": "asc", "missing": "_last"}}, *sort_clauses]
-    elif sort == "winners":
-        sort_clauses = [
-            {
-                "_script": {
-                    "type": "number",
-                    "order": "desc",
-                    "script": {
-                        "lang": "painless",
-                        "source": "return doc.containsKey('faute_type') && !doc['faute_type'].empty && doc['faute_type'].value == 'pt_gagne' ? 1 : 0;"
-                    }
-                }
-            },
-            *sort_clauses
-        ]
-    elif sort == "errors":
-        sort_clauses = [
-            {
-                "_script": {
-                    "type": "number",
-                    "order": "desc",
-                    "script": {
-                        "lang": "painless",
-                        "source": "return doc.containsKey('faute_type') && !doc['faute_type'].empty && doc['faute_type'].value != 'pt_gagne' ? 1 : 0;"
-                    }
-                }
-            },
-            *sort_clauses
-        ]
-
-    search_body = {
-        "query": query,
-        "from": from_offset,
-        "size": size,
-        "sort": sort_clauses
-    }
-    
     try:
-        response = es_request("POST", f"/{ES_INDEX}/_search", search_body)
+        return execute_search(query=query, sort=sort, page=page, size=size)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Elasticsearch error: {str(e)}")
-    
-    hits = response.get("hits", {})
-    total = hits.get("total", {}).get("value", 0)
-    points = [{"id": hit["_id"], **hit["_source"]} for hit in hits.get("hits", [])]
-    
-    return {
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": (total + size - 1) // size if total > 0 else 0,
-        "points": points
-    }
 
 
 @router.get("/stats")
@@ -418,6 +546,96 @@ async def get_search_stats(
             "avg": round(duree_stats.get("avg", 0), 1) if duree_stats.get("count", 0) > 0 else 0
         }
     }
+
+
+@router.get("/llm-search")
+async def llm_search_points(
+    q: str = Query(..., description="Natural language query to interpret with the LLM"),
+    match_id: Optional[str] = Query(None, description="ID du match"),
+    player: Optional[str] = Query(None, description="Nom du joueur"),
+    winner: Optional[str] = Query(None, description="Gagnant du point"),
+    serveur: Optional[str] = Query(None, description="Serveur du point"),
+    set_num: Optional[int] = Query(None, description="Numéro du set"),
+    nb_coups_min: Optional[int] = Query(None, description="Nombre minimum de coups"),
+    nb_coups_max: Optional[int] = Query(None, description="Nombre maximum de coups"),
+    duree_min: Optional[int] = Query(None, description="Durée minimale du point (frames)"),
+    duree_max: Optional[int] = Query(None, description="Durée maximale du point (frames)"),
+    effet: Optional[str] = Query(None, description="Effet recherché"),
+    lateralite: Optional[str] = Query(None, description="Latéralité"),
+    faute_type: Optional[str] = Query(None, description="Type de faute"),
+    winning_shot: Optional[str] = Query(None, description="Type de coup gagnant"),
+    winning_shot_status: Optional[str] = Query(None, description="winner ou error"),
+    zone: Optional[str] = Query(None, description="Zone de jeu"),
+    service_zone: Optional[str] = Query(None, description="Zone de service"),
+    service_lateralite: Optional[str] = Query(None, description="Latéralité du service"),
+    sort: Optional[str] = Query(None, description="Ordre de tri explicite"),
+    page: int = Query(1, ge=1, description="Numéro de page"),
+    size: int = Query(20, ge=1, le=100, description="Nombre de résultats par page")
+):
+    """
+    Use an LLM to convert a natural-language query into deterministic filters,
+    then run the standard Elasticsearch search.
+    """
+    if not check_es_connection():
+        raise HTTPException(
+            status_code=503,
+            detail="Elasticsearch is not available. Make sure Docker is running."
+        )
+
+    if not check_index_exists():
+        return {
+            "total": 0,
+            "page": page,
+            "size": size,
+            "pages": 0,
+            "points": [],
+            "applied_filters": {},
+            "message": "No data indexed yet. Run: python backend/scripts/index_to_elasticsearch.py"
+        }
+
+    try:
+        plan = parse_llm_search_query(q)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM parsing error: {str(e)}")
+
+    explicit_filters = compact_filters({
+        "match_id": match_id,
+        "player": player,
+        "winner": winner,
+        "serveur": serveur,
+        "set_num": set_num,
+        "nb_coups_min": nb_coups_min,
+        "nb_coups_max": nb_coups_max,
+        "duree_min": duree_min,
+        "duree_max": duree_max,
+        "effet": effet,
+        "lateralite": lateralite,
+        "faute_type": faute_type,
+        "winning_shot": winning_shot,
+        "winning_shot_status": winning_shot_status,
+        "zone": zone,
+        "service_zone": service_zone,
+        "service_lateralite": service_lateralite,
+    })
+    parsed_filters = compact_filters(plan.filters.model_dump())
+    applied_filters = {**parsed_filters, **explicit_filters}
+    applied_sort = sort or plan.sort or "chronological"
+
+    query_body = build_es_query(**applied_filters)
+
+    try:
+        result = execute_search(query=query_body, sort=applied_sort, page=page, size=size)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Elasticsearch error: {str(e)}")
+
+    result["mode"] = "llm"
+    result["applied_filters"] = applied_filters
+    result["applied_sort"] = applied_sort
+    result["llm_explanation"] = plan.reasoning
+    result["original_query"] = q
+    return result
 
 
 @router.get("/point/{match_id}/{point_id}")
