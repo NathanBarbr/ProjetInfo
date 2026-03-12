@@ -4,8 +4,11 @@ Provides highlights mode and similar recommendations.
 """
 
 import os
+import json
 import numpy as np
-from typing import Optional, List
+from collections import OrderedDict
+from threading import Lock
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query
 
 # Import the indexer
@@ -33,6 +36,103 @@ router = APIRouter(prefix="/api/semantic", tags=["semantic-search"])
 # Singleton indexer instance (lazy initialization)
 _indexer: Optional[ElasticSearchIndexer] = None
 _embedder: Optional[PointEmbedder] = None
+_query_embedding_cache: "OrderedDict[str, np.ndarray]" = OrderedDict()
+_semantic_search_cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+_CACHE_LIMIT = 20
+_cache_lock = Lock()
+_CACHE_DIR = Path(__file__).parent.parent / ".cache"
+_CACHE_FILE = _CACHE_DIR / "semantic_cache.json"
+
+
+def _make_cache_key(payload: Dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, ensure_ascii=True)
+
+
+def _prune_caches_locked() -> None:
+    while len(_query_embedding_cache) > _CACHE_LIMIT:
+        _query_embedding_cache.popitem(last=False)
+    while len(_semantic_search_cache) > _CACHE_LIMIT:
+        _semantic_search_cache.popitem(last=False)
+
+
+def _save_cache_to_disk_locked() -> None:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "query_embeddings": [
+            {"key": key, "value": value.tolist()}
+            for key, value in _query_embedding_cache.items()
+        ],
+        "semantic_searches": [
+            {"key": key, "value": value}
+            for key, value in _semantic_search_cache.items()
+        ],
+    }
+    with _CACHE_FILE.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle)
+
+
+def _load_cache_from_disk() -> None:
+    if not _CACHE_FILE.exists():
+        return
+
+    try:
+        with _CACHE_FILE.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return
+
+    with _cache_lock:
+        _query_embedding_cache.clear()
+        for item in payload.get("query_embeddings", []):
+            key = item.get("key")
+            value = item.get("value")
+            if isinstance(key, str) and isinstance(value, list):
+                _query_embedding_cache[key] = np.array(value, dtype=float)
+
+        _semantic_search_cache.clear()
+        for item in payload.get("semantic_searches", []):
+            key = item.get("key")
+            value = item.get("value")
+            if isinstance(key, str) and isinstance(value, dict):
+                _semantic_search_cache[key] = value
+
+        _prune_caches_locked()
+
+
+def _get_cached_embedding(cache_key: str) -> Optional[np.ndarray]:
+    with _cache_lock:
+        cached = _query_embedding_cache.get(cache_key)
+        if cached is None:
+            return None
+        _query_embedding_cache.move_to_end(cache_key)
+        _save_cache_to_disk_locked()
+        return cached.copy()
+
+
+def _store_cached_embedding(cache_key: str, embedding: np.ndarray) -> None:
+    with _cache_lock:
+        _query_embedding_cache[cache_key] = embedding.copy()
+        _query_embedding_cache.move_to_end(cache_key)
+        _prune_caches_locked()
+        _save_cache_to_disk_locked()
+
+
+def _get_cached_search(cache_key: str) -> Optional[Dict[str, Any]]:
+    with _cache_lock:
+        cached = _semantic_search_cache.get(cache_key)
+        if cached is None:
+            return None
+        _semantic_search_cache.move_to_end(cache_key)
+        _save_cache_to_disk_locked()
+        return json.loads(json.dumps(cached))
+
+
+def _store_cached_search(cache_key: str, payload: Dict[str, Any]) -> None:
+    with _cache_lock:
+        _semantic_search_cache[cache_key] = json.loads(json.dumps(payload))
+        _semantic_search_cache.move_to_end(cache_key)
+        _prune_caches_locked()
+        _save_cache_to_disk_locked()
 
 def get_indexer() -> ElasticSearchIndexer:
     """Get or create the ElasticSearchIndexer singleton."""
@@ -62,6 +162,9 @@ def get_embedder() -> PointEmbedder:
         _embedder.load_model()
     return _embedder
 
+
+_load_cache_from_disk()
+
 @router.get("/status")
 async def get_semantic_status():
     """
@@ -74,7 +177,14 @@ async def get_semantic_status():
             "available": True,
             "index": indexer.INDEX_NAME,
             "stats": stats,
-            "embedder_available": HAS_EMBEDDER
+            "embedder_available": HAS_EMBEDDER,
+            "cache": {
+                "max_entries": _CACHE_LIMIT,
+                "persistent": True,
+                "file": str(_CACHE_FILE),
+                "query_embeddings": len(_query_embedding_cache),
+                "semantic_searches": len(_semantic_search_cache),
+            }
         }
     except Exception as e:
         return {
@@ -317,8 +427,7 @@ async def text_semantic_search(
     """
     try:
         indexer = get_indexer()
-        embedder = get_embedder()
-        
+
         # Build filters dict
         filters = {}
         if match_id: filters["match_id"] = match_id
@@ -329,14 +438,30 @@ async def text_semantic_search(
         if winning_shot: filters["dernier_coup"] = winning_shot
         if service_lateralite: filters["service_lateralite"] = service_lateralite
         if service_zone: filters["service_zone"] = service_zone
-        
-        query_embedding = embedder.embed_query(q)
-        
+
+        normalized_filters = filters if filters else None
+        search_cache_key = _make_cache_key({
+            "q": q.strip(),
+            "k": k,
+            "filters": normalized_filters or {}
+        })
+        cached_response = _get_cached_search(search_cache_key)
+        if cached_response is not None:
+            cached_response["cache_hit"] = True
+            return cached_response
+
+        embedder = get_embedder()
+        embedding_cache_key = _make_cache_key({"q": q.strip()})
+        query_embedding = _get_cached_embedding(embedding_cache_key)
+        if query_embedding is None:
+            query_embedding = embedder.embed_query(q)
+            _store_cached_embedding(embedding_cache_key, query_embedding)
+
         results = indexer.hybrid_search(
             query_embedding=query_embedding,
             text_query=q,
             k=k,
-            filters=filters if filters else None,
+            filters=normalized_filters,
             vector_weight=0.7 # Combine text and vector similarity
         )
         
@@ -352,14 +477,17 @@ async def text_semantic_search(
             point = enrich_point_data(point)
             points.append(point)
         
-        return {
+        response_payload = {
             "total": len(points),
             "page": 1,
             "size": k,
             "pages": 1,
             "mode": "semantic",
-            "points": points
+            "points": points,
+            "cache_hit": False
         }
+        _store_cached_search(search_cache_key, response_payload)
+        return response_payload
     except Exception as e:
         import traceback
         traceback.print_exc()
