@@ -22,6 +22,7 @@ interface SearchResult {
     dernier_coup?: string;
     nb_coups?: number;
     duree?: number;
+    duree_secondes?: number;
     duree_frames?: number;
     description?: string;
     score_A?: number;
@@ -29,6 +30,7 @@ interface SearchResult {
     is_set_point?: boolean;
     is_point_gagnant?: boolean;
     similarity_score?: number;
+    highlight_score?: number;
     [key: string]: any;
 }
 
@@ -703,7 +705,7 @@ function SearchContent() {
                                     : "bg-card border border-input text-muted-foreground hover:text-foreground"
                                     }`}
                             >
-                                SÃ©mantique
+                                Semantic
                             </button>
                             <button
                                 type="button"
@@ -735,7 +737,7 @@ function SearchContent() {
                         )}
                         {searchMode === "llm" && (
                             <span className="text-xs text-emerald-400">
-                                Le LLM transforme ta requÃªte en filtres dÃ©terministes
+                                Le LLM transforme ta requete en filtres deterministes
                             </span>
                         )}
                         {searchMode === "highlights" && (

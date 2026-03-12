@@ -247,13 +247,10 @@ async def search_highlights(
     set_num: Optional[int] = Query(None, description="Filter by set number")
 ):
     """
-    Search points sorted by similarity to "beautiful points" (highlights).
-    
-    Highlights are defined as:
-    - Points gagnants (faute_type = pt_gagne) - winning shots, not opponent errors
-    - Long rallies (nb_coups >= 5)
-    
-    Returns points most similar to this profile, with set-ending detection.
+    Search highlights using an explicit score built from rally quality.
+
+    The score prioritizes rally duration, sequence variety, finish quality,
+    and score pressure instead of relying only on shot count.
     """
     try:
         indexer = get_indexer()
@@ -269,8 +266,8 @@ async def search_highlights(
         if set_num:
             filters["set_num"] = set_num
         
-        # Search by highlight similarity
-        results = indexer.search_by_highlight_similarity(
+        # Search by explicit highlight score
+        results = indexer.search_highlights(
             k=k,
             filters=filters if filters else None
         )
@@ -280,7 +277,7 @@ async def search_highlights(
         for r in results:
             point = {
                 "id": r.get("_id"),
-                "similarity_score": r.get("_score"),
+                "highlight_score": r.get("highlight_score", r.get("_score")),
                 **{k: v for k, v in r.items() if not k.startswith("_")}
             }
             # Enrich with additional computed fields

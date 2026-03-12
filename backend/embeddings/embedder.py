@@ -258,10 +258,24 @@ def load_csv_data(csv_path: str) -> pd.DataFrame:
     df = df.fillna("")
     
     # Conversion des colonnes numériques
-    numeric_cols = ["set_num", "score_A", "score_B", "nb_coups", "point_id"]
+    numeric_cols = [
+        "set_num",
+        "score_A",
+        "score_B",
+        "nb_coups",
+        "point_id",
+        "duree_frames",
+        "frame_debut",
+        "frame_fin",
+    ]
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+
+    float_cols = ["duree_secondes"]
+    for col in float_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0).astype(float)
     
     return df
 

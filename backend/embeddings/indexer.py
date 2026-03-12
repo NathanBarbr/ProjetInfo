@@ -24,6 +24,102 @@ class ElasticSearchIndexer:
     """
     
     INDEX_NAME = "tennis_points"
+
+    @staticmethod
+    def _safe_float(value: Any) -> float:
+        try:
+            if value in ("", None):
+                return 0.0
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _safe_int(value: Any) -> int:
+        try:
+            if value in ("", None):
+                return 0
+            return int(float(value))
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _split_sequence(value: Any) -> List[str]:
+        if value in ("", None):
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return [item.strip() for item in str(value).split(",") if item.strip()]
+
+    @staticmethod
+    def _normalize(value: float, min_value: float, max_value: float) -> float:
+        if max_value <= min_value:
+            return 0.0
+        return max(0.0, min(1.0, (value - min_value) / (max_value - min_value)))
+
+    @classmethod
+    def _is_set_point(cls, point: Dict[str, Any]) -> bool:
+        score_a = cls._safe_int(point.get("score_A", 0))
+        score_b = cls._safe_int(point.get("score_B", 0))
+        winner = str(point.get("winner", "") or "")
+        player_a = str(point.get("player_A", "") or "")
+
+        if winner == player_a:
+            return score_a >= 11 and (score_a - score_b) >= 2
+        return score_b >= 11 and (score_b - score_a) >= 2
+
+    @classmethod
+    def compute_highlight_score(cls, point: Dict[str, Any]) -> float:
+        duration = cls._safe_float(point.get("duree_secondes", 0.0))
+        nb_coups = cls._safe_int(point.get("nb_coups", 0))
+        faute_type = str(point.get("faute_type", "") or "")
+        dernier_coup = str(point.get("dernier_coup", "") or "")
+
+        effets = [e for e in cls._split_sequence(point.get("sequence_effets", "")) if e != "service"]
+        lateralites = cls._split_sequence(point.get("sequence_lateralites", ""))
+        zones = cls._split_sequence(point.get("sequence_zones", ""))
+
+        duration_score = cls._normalize(duration, 2.5, 9.0)
+        rally_depth_score = max(duration_score, cls._normalize(nb_coups, 4, 14))
+        effects_variety_score = cls._normalize(len(set(effets)), 1, 4) if effets else 0.0
+        laterality_variety_score = cls._normalize(len(set(lateralites)), 1, 2) if lateralites else 0.0
+        zone_variety_score = cls._normalize(len(set(zones)), 1, 5) if zones else 0.0
+
+        finish_score = 0.2
+        if faute_type == "pt_gagne":
+            finish_score = 1.0
+        elif faute_type in {"filet", "out"}:
+            finish_score = 0.35
+
+        if dernier_coup in {"topspin", "flip"}:
+            finish_score = min(1.0, finish_score + 0.15)
+        elif dernier_coup in {"block", "coupe"}:
+            finish_score = min(1.0, finish_score + 0.05)
+
+        score_a = cls._safe_int(point.get("score_A", 0))
+        score_b = cls._safe_int(point.get("score_B", 0))
+        score_gap = abs(score_a - score_b)
+        max_score = max(score_a, score_b)
+        pressure_score = 0.0
+        if cls._is_set_point(point):
+            pressure_score = 1.0
+        elif max_score >= 10 and score_gap <= 1:
+            pressure_score = 0.85
+        elif max_score >= 9 and score_gap <= 2:
+            pressure_score = 0.65
+        elif max_score >= 8 and score_gap <= 2:
+            pressure_score = 0.45
+
+        score = (
+            0.35 * duration_score
+            + 0.15 * rally_depth_score
+            + 0.15 * effects_variety_score
+            + 0.10 * laterality_variety_score
+            + 0.10 * zone_variety_score
+            + 0.10 * finish_score
+            + 0.05 * pressure_score
+        )
+        return round(score * 100, 2)
     
     def __init__(
         self, 
@@ -113,6 +209,8 @@ class ElasticSearchIndexer:
                     "serveur": {"type": "keyword"},
                     "winner": {"type": "keyword"},
                     "nb_coups": {"type": "integer"},
+                    "duree_frames": {"type": "integer"},
+                    "duree_secondes": {"type": "float"},
                     "player_A": {"type": "keyword"},
                     "player_B": {"type": "keyword"},
                     "competition": {"type": "keyword"},
@@ -136,6 +234,7 @@ class ElasticSearchIndexer:
                     
                     # Clip vidéo
                     "clip_path": {"type": "keyword"},
+                    "highlight_score": {"type": "float"},
                     
                     # Description textuelle générée
                     "description": {"type": "text", "analyzer": "french"},
@@ -184,6 +283,7 @@ class ElasticSearchIndexer:
                 # Ajouter la description et l'embedding
                 doc["description"] = descriptions[idx]
                 doc["embedding"] = embeddings[idx].tolist()
+                doc["highlight_score"] = self.compute_highlight_score(doc)
                 
                 # Nettoyer les valeurs NaN (attention aux arrays numpy)
                 def clean_value(v):
@@ -276,6 +376,87 @@ class ElasticSearchIndexer:
             results.append(result)
         
         return results
+
+    def search_highlights(
+        self,
+        k: int = 20,
+        filters: Optional[Dict[str, Any]] = None,
+        candidate_limit: int = 2000
+    ) -> List[Dict[str, Any]]:
+        """
+        Recherche les highlights par score explicite.
+
+        Si le champ highlight_score n'est pas indexé (ancien index),
+        recalcule le score côté Python sur un ensemble de candidats.
+        """
+        if self.client is None:
+            self.connect()
+
+        query: Dict[str, Any] = {"match_all": {}}
+        if filters:
+            filter_clauses = []
+            for field, value in filters.items():
+                if value is not None:
+                    if isinstance(value, list):
+                        filter_clauses.append({"terms": {field: value}})
+                    else:
+                        filter_clauses.append({"term": {field: value}})
+            if filter_clauses:
+                query = {"bool": {"filter": filter_clauses}}
+
+        response = self.client.search(
+            index=self.INDEX_NAME,
+            query=query,
+            size=k,
+            sort=[
+                {"highlight_score": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
+                {"duree_secondes": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
+                {"nb_coups": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}},
+            ],
+            source_excludes=["embedding"]
+        )
+
+        hits = response["hits"]["hits"]
+        if hits and hits[0].get("_source", {}).get("highlight_score") is not None:
+            results = []
+            for hit in hits:
+                result = hit["_source"]
+                result["_score"] = result.get("highlight_score", 0.0)
+                result["_id"] = hit["_id"]
+                results.append(result)
+            return results
+
+        count_response = self.client.count(index=self.INDEX_NAME, query=query)
+        candidate_size = min(max(k * 20, 200), candidate_limit, count_response["count"])
+
+        fallback = self.client.search(
+            index=self.INDEX_NAME,
+            query=query,
+            size=candidate_size,
+            sort=[
+                {"duree_secondes": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
+                {"nb_coups": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}},
+            ],
+            source_excludes=["embedding"]
+        )
+
+        rescored = []
+        for hit in fallback["hits"]["hits"]:
+            result = hit["_source"]
+            result["highlight_score"] = self.compute_highlight_score(result)
+            result["_score"] = result["highlight_score"]
+            result["_id"] = hit["_id"]
+            rescored.append(result)
+
+        rescored.sort(
+            key=lambda item: (
+                item.get("highlight_score", 0.0),
+                self._safe_float(item.get("duree_secondes", 0.0)),
+                self._safe_int(item.get("nb_coups", 0)),
+            ),
+            reverse=True
+        )
+        return rescored[:k]
     
     def hybrid_search(
         self,
