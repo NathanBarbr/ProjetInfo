@@ -12,13 +12,14 @@ Usage:
 import csv
 import json
 import argparse
+import os
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
 # Configuration Elasticsearch
-ES_HOST = "http://localhost:9200"
+ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 INDEX_NAME = "pingpong_points"
 
 # Mapping pour l'index (types de champs optimisés pour la recherche)
@@ -36,6 +37,7 @@ INDEX_MAPPING = {
             "winner": {"type": "keyword"},
             "nb_coups": {"type": "integer"},
             "duree_frames": {"type": "integer"},
+            "duree_secondes": {"type": "float"},
             "frame_debut": {"type": "integer"},
             "frame_fin": {"type": "integer"},
             
@@ -159,6 +161,7 @@ def load_csv(csv_path: Path) -> list[dict]:
                 'winner': row['winner'],
                 'nb_coups': int(row['nb_coups']),
                 'duree_frames': int(row['duree_frames']),
+                'duree_secondes': float(row['duree_secondes']) if row.get('duree_secondes') else 0.0,
                 'frame_debut': int(row['frame_debut']),
                 'frame_fin': int(row['frame_fin']),
                 'sequence_coups': row['sequence_coups'],

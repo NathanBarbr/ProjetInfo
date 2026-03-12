@@ -244,6 +244,30 @@ def get_match_folder(video_id: str) -> Path | None:
     return None
 
 
+def find_fallback_thumbnail(match_folder: Path) -> Path | None:
+    """
+    Find the first available thumbnail in a match folder.
+    Prefers clip thumbnails generated alongside clips.
+    """
+    clips_dir = match_folder / "clips"
+    if not clips_dir.exists():
+        return None
+
+    for point_dir in sorted(clips_dir.iterdir()):
+        if not point_dir.is_dir() or not point_dir.name.startswith("set_"):
+            continue
+
+        clip_id = point_dir.name
+        for candidate in (
+            point_dir / f"{clip_id}_crop_carre.jpg",
+            point_dir / f"{clip_id}.jpg",
+        ):
+            if candidate.exists():
+                return candidate
+
+    return None
+
+
 
 def get_clips_for_video(video_id: str) -> dict:
     """
@@ -424,14 +448,18 @@ async def get_video_thumbnail(video_id: str):
         raise HTTPException(status_code=404, detail="No thumbnail configured for this video")
 
     # 3. Construct path
-    # If match_folder is present, look there
-    if video_meta.get("match_folder"):
-        thumb_path = PROJECT_ROOT / video_meta["match_folder"] / thumb_filename
+    match_folder = PROJECT_ROOT / video_meta["match_folder"] if video_meta.get("match_folder") else None
+    if match_folder:
+        thumb_path = match_folder / thumb_filename
     else:
-        # Otherwise look in videos dir
         thumb_path = VIDEOS_DIR / thumb_filename
-    
-    if not thumb_path.exists():
-        raise HTTPException(status_code=404, detail=f"Thumbnail file not found: {thumb_filename}")
-        
-    return FileResponse(thumb_path, media_type="image/jpeg")
+
+    if thumb_path.exists():
+        return FileResponse(thumb_path, media_type="image/jpeg")
+
+    if match_folder:
+        fallback_path = find_fallback_thumbnail(match_folder)
+        if fallback_path:
+            return FileResponse(fallback_path, media_type="image/jpeg")
+
+    raise HTTPException(status_code=404, detail=f"Thumbnail file not found: {thumb_filename}")

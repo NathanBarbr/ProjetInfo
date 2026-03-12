@@ -16,5 +16,23 @@
         "match_folder": "backend/videos/HUGO-CALDERANO_vs_FELIX-LEBRUN",
         "thumbnail": "HUGO-CALDERANO_vs_FELIX-LEBRUN.jpg",
         "has_clips": true
+    },
+    {
+        "id": "jia-nan-yuan-vs-nicole-arlia",
+        "title": "Jia Nan YUAN vs Nicole ARLIA",
+        "description": "Table Tennis Match - JIA-NAN YUAN vs NICOLE ARLIA",
+        "filename": "JIA-NAN-YUAN_vs_NICOLE-ARLIA.mp4",
+        "match_folder": "backend/videos/JIA-NAN-YUAN_vs_NICOLE-ARLIA",
+        "thumbnail": "clips/set_1_point_0/set_1_point_0.jpg",
+        "has_clips": true
+    },
+    {
+        "id": "prithika-pavade-vs-sibel-altinkaya",
+        "title": "Prithika PAVADE vs Sibel ALTINKAYA",
+        "description": "Table Tennis Match - PRITHIKA PAVADE vs SIBEL ALTINKAYA",
+        "filename": "PRITHIKA-PAVADE_vs_SIBEL-ALTINKAYA.mp4",
+        "match_folder": "backend/videos/PRITHIKA-PAVADE_vs_SIBEL-ALTINKAYA",
+        "thumbnail": "clips/set_1_point_0/set_1_point_0.jpg",
+        "has_clips": true
     }
 ]
