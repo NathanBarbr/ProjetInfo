@@ -21,6 +21,7 @@ interface SearchResult {
     faute_type?: string;
     dernier_coup?: string;
     nb_coups?: number;
+    duree?: number;
     duree_frames?: number;
     description?: string;
     score_A?: number;
@@ -28,7 +29,6 @@ interface SearchResult {
     is_set_point?: boolean;
     is_point_gagnant?: boolean;
     similarity_score?: number;
-    duree_frames?: number;
     [key: string]: any;
 }
 
@@ -38,7 +38,12 @@ interface SearchResponse {
     page: number;
     size: number;
     pages: number;
+    mode?: string;
     message?: string;
+    applied_filters?: Record<string, string | number>;
+    applied_sort?: string;
+    llm_explanation?: string | null;
+    original_query?: string;
 }
 
 interface RecommendationResponse {
@@ -56,9 +61,11 @@ interface SearchStats {
     service_zones: string[];
     service_lateralites: string[];
     nb_coups: { min: number; max: number; avg: number };
+    duree?: { min: number; max: number; avg: number };
 }
 
 const API_URL = "http://localhost:8001";
+type SearchMode = "semantic" | "highlights" | "llm";
 
 function SearchContent() {
     const router = useRouter();
@@ -75,13 +82,22 @@ function SearchContent() {
     const [message, setMessage] = useState<string | null>(null);
     const [stats, setStats] = useState<SearchStats | null>(null);
 
-    // Semantic search state
-    const [sortMode, setSortMode] = useState<"chronological" | "highlights">("chronological");
+    // Search mode state
+    const [searchMode, setSearchMode] = useState<SearchMode>(
+        searchParams.get("mode") === "llm"
+            ? "llm"
+            : searchParams.get("mode") === "highlights"
+                ? "highlights"
+                : "semantic"
+    );
     const [sortOrder, setSortOrder] = useState<string>(searchParams.get("sort") || "chronological");
     const [semanticAvailable, setSemanticAvailable] = useState(false);
+    const [llmAvailable, setLlmAvailable] = useState(false);
     const [recommendations, setRecommendations] = useState<SearchResult[]>([]);
     const [loadingRecommendations, setLoadingRecommendations] = useState(false);
     const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+    const [llmAppliedFilters, setLlmAppliedFilters] = useState<Record<string, string | number> | null>(null);
+    const [llmExplanation, setLlmExplanation] = useState<string | null>(null);
 
 
     // Filters state
@@ -108,8 +124,12 @@ function SearchContent() {
             .then((data) => {
                 const connected = data.elasticsearch.connected;
                 setEsStatus(connected ? "connected" : "disconnected");
+                setLlmAvailable(data.llm?.available === true);
             })
-            .catch(() => setEsStatus("disconnected"));
+            .catch(() => {
+                setEsStatus("disconnected");
+                setLlmAvailable(false);
+            });
 
         // Check semantic search availability
         fetch(`${API_URL}/api/semantic/status`)
@@ -155,12 +175,14 @@ function SearchContent() {
         setLoading(true);
         setMessage(null);
         setRecommendations([]);
+        setLlmAppliedFilters(null);
+        setLlmExplanation(null);
 
         // Build params from URL (source of truth)
         const params = new URLSearchParams(searchParams.toString());
         if (!params.has("page")) params.set("page", "1");
         if (!params.has("size")) params.set("size", "20");
-        if (sortMode === "chronological") {
+        if (searchMode !== "highlights") {
             params.set("sort", sortOrder);
         } else {
             params.delete("sort");
@@ -169,8 +191,8 @@ function SearchContent() {
         try {
             let searchData: SearchResponse;
 
-            // Use semantic highlights endpoint if sortMode is highlights
-            if (sortMode === "highlights" && semanticAvailable) {
+            // Use semantic highlights endpoint if searchMode is highlights
+            if (searchMode === "highlights" && semanticAvailable) {
                 const highlightParams = new URLSearchParams();
                 highlightParams.set("k", params.get("size") || "20");
                 if (params.get("match_id")) highlightParams.set("match_id", params.get("match_id")!);
@@ -191,7 +213,14 @@ function SearchContent() {
                 } else {
                     throw new Error("Highlights API error");
                 }
-            } else if (params.get("q") && semanticAvailable) {
+            } else if (searchMode === "llm" && params.get("q") && llmAvailable) {
+                const llmRes = await fetch(`${API_URL}/api/search/llm-search?${params.toString()}`);
+                if (!llmRes.ok) {
+                    const errorText = await llmRes.text();
+                    throw new Error(`LLM Search API error (${llmRes.status}): ${errorText}`);
+                }
+                searchData = await llmRes.json();
+            } else if (searchMode === "semantic" && params.get("q") && semanticAvailable) {
                 // Semantic Search for text query
                 const semanticParams = new URLSearchParams();
                 semanticParams.set("q", params.get("q")!);
@@ -235,6 +264,10 @@ function SearchContent() {
             setTotal(searchData.total || 0);
             setPages(searchData.pages || 0);
             if (searchData.message) setMessage(searchData.message);
+            if (searchData.mode === "llm") {
+                setLlmAppliedFilters(searchData.applied_filters || null);
+                setLlmExplanation(searchData.llm_explanation || null);
+            }
 
             // Save queue (for continuous play)
             if (searchData.points && searchData.points.length > 0 && typeof window !== "undefined") {
@@ -246,9 +279,11 @@ function SearchContent() {
             }
 
             // Fetch recommendations
-            const hasFilters = Array.from(params.entries()).some(([key, val]) =>
-                !["page", "size"].includes(key) && val
-            );
+            const hasFilters = searchData.mode === "llm"
+                ? Boolean(searchData.applied_filters && Object.keys(searchData.applied_filters).length > 0)
+                : Array.from(params.entries()).some(([key, val]) =>
+                    !["page", "size", "mode"].includes(key) && val
+                );
 
             if (hasFilters && searchData.points?.length > 0) {
                 // Normal case: recommend similar to current results
@@ -270,9 +305,17 @@ function SearchContent() {
             }
 
             // 2. Fetch Stats with SAME params (for contextual filtering)
-            const statsParams = new URLSearchParams(params.toString());
-            statsParams.delete("page");
-            statsParams.delete("size");
+            const statsParams = new URLSearchParams();
+            const statsSource =
+                searchData.mode === "llm" && searchData.applied_filters
+                    ? Object.entries(searchData.applied_filters)
+                    : Array.from(params.entries()).filter(([key]) => !["page", "size", "mode", "sort", "q"].includes(key));
+
+            statsSource.forEach(([key, value]) => {
+                if (value !== undefined && value !== null && value !== "") {
+                    statsParams.set(key, String(value));
+                }
+            });
 
             const statsRes = await fetch(`${API_URL}/api/search/stats?${statsParams.toString()}`);
             if (statsRes.ok) {
@@ -287,7 +330,7 @@ function SearchContent() {
         } finally {
             setLoading(false);
         }
-    }, [searchParams, esStatus, sortMode, sortOrder, semanticAvailable, fetchRecommendations]);
+    }, [searchParams, esStatus, searchMode, sortOrder, semanticAvailable, llmAvailable, fetchRecommendations]);
 
     // Effect to run search when URL params or sort mode change
     useEffect(() => {
@@ -306,6 +349,26 @@ function SearchContent() {
     // Keep sortOrder in sync with URL (back/forward navigation)
     useEffect(() => {
         setSortOrder(searchParams.get("sort") || "chronological");
+        setSearchMode(
+            searchParams.get("mode") === "llm"
+                ? "llm"
+                : searchParams.get("mode") === "highlights"
+                    ? "highlights"
+                : "semantic"
+        );
+        setQuery(searchParams.get("q") || "");
+        setFilters({
+            match_id: searchParams.get("match_id") || "",
+            set_num: searchParams.get("set_num") || "",
+            winner: searchParams.get("winner") || "",
+            serveur: searchParams.get("serveur") || "",
+            faute_type: searchParams.get("faute_type") || "",
+            winning_shot: searchParams.get("winning_shot") || "",
+            service_lateralite: searchParams.get("service_lateralite") || "",
+            service_zone: searchParams.get("service_zone") || "",
+            nb_coups_min: searchParams.get("nb_coups_min") || "",
+            nb_coups_max: searchParams.get("nb_coups_max") || ""
+        });
     }, [searchParams]);
 
     // Update URL helper
@@ -330,7 +393,7 @@ function SearchContent() {
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        updateUrl({ q: query, sort: sortOrder, ...filters });
+        updateUrl({ q: query, sort: sortOrder, mode: searchMode, ...filters });
     };
 
     const handleFilterChange = (key: string, value: string) => {
@@ -352,6 +415,11 @@ function SearchContent() {
         updateUrl({ sort: value });
     };
 
+    const handleModeChange = (value: SearchMode) => {
+        setSearchMode(value);
+        updateUrl({ mode: value });
+    };
+
     // Slug and Clip helpers
     const getSlug = (matchId: string) => {
         const mapping: Record<string, string> = {
@@ -367,6 +435,34 @@ function SearchContent() {
             if (parts.length >= 2) return parts[1];
         }
         return `set_${result.set_num}_point_${result.point_id}`;
+    };
+
+    const getDurationFrames = (result: SearchResult) => {
+        const duration = result.duree_frames ?? result.duree;
+        return typeof duration === "number" ? duration : undefined;
+    };
+
+    const formatFilterLabel = (key: string) => {
+        const labels: Record<string, string> = {
+            match_id: "Match",
+            player: "Joueur",
+            winner: "Gagnant",
+            serveur: "Serveur",
+            set_num: "Set",
+            nb_coups_min: "Coups min",
+            nb_coups_max: "Coups max",
+            duree_min: "Durée min",
+            duree_max: "Durée max",
+            effet: "Effet",
+            lateralite: "Latéralité",
+            faute_type: "Faute",
+            winning_shot: "Dernier coup",
+            winning_shot_status: "Type de point",
+            zone: "Zone",
+            service_zone: "Zone de service",
+            service_lateralite: "Main de service",
+        };
+        return labels[key] || key;
     };
 
     const toggleFavorite = (result: SearchResult) => {
@@ -388,14 +484,15 @@ function SearchContent() {
 
     const buildDescription = (result: SearchResult) => {
         const parts: string[] = [];
+        const durationFrames = getDurationFrames(result);
         if (result.set_num !== undefined && result.point_id !== undefined) {
             parts.push(`Set ${result.set_num} · Point ${result.point_id}`);
         }
         if (result.nb_coups !== undefined) {
             parts.push(`${result.nb_coups} coups`);
         }
-        if (result.duree_frames !== undefined) {
-            const sec = Math.max(1, Math.round(result.duree_frames / 25));
+        if (durationFrames !== undefined) {
+            const sec = Math.max(1, Math.round(durationFrames / 25));
             parts.push(`~${sec}s`);
         }
         if (result.serveur) {
@@ -574,7 +671,7 @@ function SearchContent() {
                     <select
                         value={sortOrder}
                         onChange={(e) => handleSortChange(e.target.value)}
-                        disabled={sortMode === "highlights"}
+                        disabled={searchMode === "highlights"}
                         className="px-3 py-2 bg-card border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary disabled:opacity-50"
                     >
                         <option value="chronological">Chronologique</option>
@@ -585,7 +682,7 @@ function SearchContent() {
                         <option value="winners">Points gagnants en premier</option>
                         <option value="errors">Fautes adverses en premier</option>
                     </select>
-                    {sortMode === "highlights" && (
+                    {searchMode === "highlights" && (
                         <span className="text-xs text-amber-500">
                             Tri désactivé en mode Highlights
                         </span>
@@ -593,24 +690,37 @@ function SearchContent() {
                 </div>
 
                 {/* Sort Mode Selector */}
-                {semanticAvailable && (
+                {(semanticAvailable || llmAvailable) && (
                     <div className="flex items-center gap-4 mt-3">
                         <span className="text-sm text-muted-foreground">Mode :</span>
                         <div className="flex gap-2">
                             <button
                                 type="button"
-                                onClick={() => setSortMode("chronological")}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sortMode === "chronological"
+                                onClick={() => handleModeChange("semantic")}
+                                disabled={!semanticAvailable}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${searchMode === "semantic"
                                     ? "bg-primary text-primary-foreground"
                                     : "bg-card border border-input text-muted-foreground hover:text-foreground"
                                     }`}
                             >
-                                Chronologique
+                                SÃ©mantique
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setSortMode("highlights")}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${sortMode === "highlights"
+                                onClick={() => handleModeChange("llm")}
+                                disabled={!llmAvailable}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${searchMode === "llm"
+                                    ? "bg-emerald-600 text-white"
+                                    : "bg-card border border-input text-muted-foreground hover:text-foreground"
+                                    }`}
+                            >
+                                LLM Filters
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleModeChange("highlights")}
+                                disabled={!semanticAvailable}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${searchMode === "highlights"
                                     ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white"
                                     : "bg-card border border-input text-muted-foreground hover:text-foreground"
                                     }`}
@@ -618,7 +728,17 @@ function SearchContent() {
                                 Highlights
                             </button>
                         </div>
-                        {sortMode === "highlights" && (
+                        {searchMode === "semantic" && (
+                            <span className="text-xs text-muted-foreground">
+                                Recherche par embeddings
+                            </span>
+                        )}
+                        {searchMode === "llm" && (
+                            <span className="text-xs text-emerald-400">
+                                Le LLM transforme ta requÃªte en filtres dÃ©terministes
+                            </span>
+                        )}
+                        {searchMode === "highlights" && (
                             <span className="text-xs text-amber-500">
                                 Points gagnants avec longs échanges
                             </span>
@@ -646,6 +766,25 @@ function SearchContent() {
                 </div>
             )}
 
+            {searchMode === "llm" && llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0 && (
+                <div className="mb-6 p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className="text-sm font-medium text-emerald-300">Filtres interprétés</span>
+                        {Object.entries(llmAppliedFilters).map(([key, value]) => (
+                            <span
+                                key={key}
+                                className="px-2 py-1 rounded-full text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                            >
+                                {formatFilterLabel(key)}: {String(value)}
+                            </span>
+                        ))}
+                    </div>
+                    {llmExplanation && (
+                        <p className="text-xs text-emerald-100/80">{llmExplanation}</p>
+                    )}
+                </div>
+            )}
+
             {/* Results count */}
             {total > 0 && (
                 <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground">
@@ -670,6 +809,7 @@ function SearchContent() {
                 {results.map((result) => {
                     const videoSlug = getSlug(result.match_id);
                     const clipId = getClipId(result);
+                    const durationFrames = getDurationFrames(result);
                     const backUrl = encodeURIComponent(getBackUrl());
                     const favId = `${videoSlug}_${clipId}`;
                     const isFav = favoriteIds.has(favId);
@@ -710,7 +850,7 @@ function SearchContent() {
                                             }}
                                         >
                                             {result.nb_coups} shots
-                                            {result.duree_frames ? ` • ~${Math.round(result.duree_frames / 25)}s` : ""}
+                                            {durationFrames ? ` • ~${Math.round(durationFrames / 25)}s` : ""}
                                         </span>
                                     </div>
 
@@ -819,6 +959,7 @@ function SearchContent() {
                             {recommendations.map((rec) => {
                                 const videoSlug = getSlug(rec.match_id);
                                 const clipId = getClipId(rec);
+                                const durationFrames = getDurationFrames(rec);
                                 return (
                                     <Link
                                         key={rec.id}
@@ -852,7 +993,7 @@ function SearchContent() {
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     {rec.nb_coups} shots
-                                                    {rec.duree_frames ? ` • ~${Math.round(rec.duree_frames / 25)}s` : ""}
+                                                    {durationFrames ? ` • ~${Math.round(durationFrames / 25)}s` : ""}
                                                 </span>
                                             </div>
                                         </div>
