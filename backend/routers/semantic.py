@@ -5,11 +5,13 @@ Provides highlights mode and similar recommendations.
 
 import os
 import json
+import math
 import numpy as np
 from collections import OrderedDict
 from threading import Lock
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 # Import the indexer
 import sys
@@ -42,6 +44,25 @@ _CACHE_LIMIT = 20
 _cache_lock = Lock()
 _CACHE_DIR = Path(__file__).parent.parent / ".cache"
 _CACHE_FILE = _CACHE_DIR / "semantic_cache.json"
+
+
+class SketchSearchPayload(BaseModel):
+    zones: List[str] = Field(default_factory=list, description="Ordered zone codes like g1,m2,d3")
+    effets: List[str] = Field(default_factory=list, description="Ordered effects like service,poussette,topspin")
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+ZONE_COORDS: Dict[str, tuple[float, float]] = {
+    "g1": (0.18, 0.20),
+    "m1": (0.50, 0.20),
+    "d1": (0.82, 0.20),
+    "g2": (0.18, 0.50),
+    "m2": (0.50, 0.50),
+    "d2": (0.82, 0.50),
+    "g3": (0.18, 0.80),
+    "m3": (0.50, 0.80),
+    "d3": (0.82, 0.80),
+}
 
 
 def _make_cache_key(payload: Dict[str, Any]) -> str:
@@ -238,13 +259,104 @@ def enrich_point_data(point: dict) -> dict:
     return point
 
 
+def _split_sequence(value: Any) -> List[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
+def _zone_distance(left: str, right: str) -> float:
+    if left == right:
+        return 0.0
+
+    left_coord = ZONE_COORDS.get(left)
+    right_coord = ZONE_COORDS.get(right)
+    if left_coord is None or right_coord is None:
+        return 1.0
+
+    dx = left_coord[0] - right_coord[0]
+    dy = left_coord[1] - right_coord[1]
+    return min(1.0, math.sqrt(dx * dx + dy * dy) / math.sqrt(2.0))
+
+
+def _effect_distance(left: str, right: str) -> float:
+    if not left and not right:
+        return 0.0
+    if left == right:
+        return 0.0
+    if not left or not right:
+        return 0.65
+    return 1.0
+
+
+def sketch_sequence_distance(
+    query_zones: List[str],
+    query_effets: List[str],
+    candidate_zones: List[str],
+    candidate_effets: List[str],
+) -> float:
+    query_len = len(query_zones)
+    candidate_len = len(candidate_zones)
+    if query_len == 0 or candidate_len == 0:
+        return float(max(query_len, candidate_len))
+
+    dp = [[0.0] * (candidate_len + 1) for _ in range(query_len + 1)]
+    for i in range(1, query_len + 1):
+        dp[i][0] = float(i)
+    for j in range(1, candidate_len + 1):
+        dp[0][j] = float(j)
+
+    for i in range(1, query_len + 1):
+        for j in range(1, candidate_len + 1):
+            zone_cost = _zone_distance(query_zones[i - 1], candidate_zones[j - 1])
+            effect_cost = _effect_distance(
+                query_effets[i - 1] if i - 1 < len(query_effets) else "",
+                candidate_effets[j - 1] if j - 1 < len(candidate_effets) else "",
+            )
+            substitute_cost = 0.7 * zone_cost + 0.3 * effect_cost
+            dp[i][j] = min(
+                dp[i - 1][j] + 0.9,
+                dp[i][j - 1] + 0.9,
+                dp[i - 1][j - 1] + substitute_cost,
+            )
+
+    return dp[query_len][candidate_len]
+
+
+def sketch_similarity_score(
+    query_zones: List[str],
+    query_effets: List[str],
+    candidate_zones: List[str],
+    candidate_effets: List[str],
+) -> float:
+    normalizer = max(len(query_zones), len(candidate_zones), 1)
+    distance = sketch_sequence_distance(
+        query_zones=query_zones,
+        query_effets=query_effets,
+        candidate_zones=candidate_zones,
+        candidate_effets=candidate_effets,
+    )
+    similarity = max(0.0, 1.0 - (distance / normalizer))
+    length_penalty = abs(len(query_zones) - len(candidate_zones)) / normalizer
+    return max(0.0, similarity - 0.1 * length_penalty)
+
+
 @router.get("/highlights")
 async def search_highlights(
     k: int = Query(20, ge=1, le=100, description="Number of results"),
     match_id: Optional[str] = Query(None, description="Filter by match"),
     winner: Optional[str] = Query(None, description="Filter by winner"),
     serveur: Optional[str] = Query(None, description="Filter by server"),
-    set_num: Optional[int] = Query(None, description="Filter by set number")
+    set_num: Optional[int] = Query(None, description="Filter by set number"),
+    duration_weight: Optional[float] = Query(None, ge=0, description="Weight for point duration"),
+    rally_depth_weight: Optional[float] = Query(None, ge=0, description="Weight for rally depth"),
+    effects_variety_weight: Optional[float] = Query(None, ge=0, description="Weight for effects variety"),
+    laterality_variety_weight: Optional[float] = Query(None, ge=0, description="Weight for laterality variety"),
+    zone_variety_weight: Optional[float] = Query(None, ge=0, description="Weight for zone variety"),
+    finish_weight: Optional[float] = Query(None, ge=0, description="Weight for point finish quality"),
+    pressure_weight: Optional[float] = Query(None, ge=0, description="Weight for score pressure")
 ):
     """
     Search highlights using an explicit score built from rally quality.
@@ -265,11 +377,25 @@ async def search_highlights(
             filters["serveur"] = serveur
         if set_num:
             filters["set_num"] = set_num
-        
+
+        highlight_weights = {
+            "duration": duration_weight,
+            "rally_depth": rally_depth_weight,
+            "effects_variety": effects_variety_weight,
+            "laterality_variety": laterality_variety_weight,
+            "zone_variety": zone_variety_weight,
+            "finish": finish_weight,
+            "pressure": pressure_weight,
+        }
+        highlight_weights = {
+            key: value for key, value in highlight_weights.items() if value is not None
+        }
+
         # Search by explicit highlight score
         results = indexer.search_highlights(
             k=k,
-            filters=filters if filters else None
+            filters=filters if filters else None,
+            weights=highlight_weights if highlight_weights else None
         )
         
         # Format and enrich results
@@ -287,6 +413,7 @@ async def search_highlights(
         return {
             "total": len(points),
             "mode": "highlights",
+            "applied_weights": indexer.resolve_highlight_weights(highlight_weights),
             "points": points
         }
         
@@ -489,3 +616,87 @@ async def text_semantic_search(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Semantic search error: {str(e)}")
+
+
+@router.post("/sketch-search")
+async def sketch_search(payload: SketchSearchPayload):
+    """
+    Find the closest indexed point to a user-drawn trajectory.
+    """
+    query_zones = _split_sequence(payload.zones)
+    query_effets = _split_sequence(payload.effets)
+
+    if not query_zones:
+        raise HTTPException(status_code=400, detail="At least one zone is required")
+
+    try:
+        indexer = get_indexer()
+        total_docs = indexer.client.count(index=indexer.INDEX_NAME).get("count", 0)
+        fetch_size = min(max(total_docs, 1), 5000)
+        response = indexer.client.search(
+            index=indexer.INDEX_NAME,
+            size=fetch_size,
+            query={"match_all": {}},
+            _source=[
+                "match_id",
+                "point_id",
+                "clip_path",
+                "winner",
+                "serveur",
+                "player_A",
+                "player_B",
+                "sequence_zones",
+                "sequence_effets",
+                "description",
+                "faute_type",
+                "nb_coups",
+                "score_A",
+                "score_B",
+            ],
+        )
+
+        matches: List[Dict[str, Any]] = []
+        for hit in response.get("hits", {}).get("hits", []):
+            source = hit.get("_source", {})
+            candidate_zones = _split_sequence(source.get("sequence_zones"))
+            if not candidate_zones:
+                continue
+
+            candidate_effets = _split_sequence(source.get("sequence_effets"))
+            similarity = sketch_similarity_score(
+                query_zones=query_zones,
+                query_effets=query_effets,
+                candidate_zones=candidate_zones,
+                candidate_effets=candidate_effets,
+            )
+
+            point = {
+                "id": hit.get("_id"),
+                "similarity_score": round(similarity, 4),
+                **source,
+            }
+            matches.append(enrich_point_data(point))
+
+        matches.sort(
+            key=lambda item: (
+                -float(item.get("similarity_score", 0.0)),
+                abs(len(_split_sequence(item.get("sequence_zones"))) - len(query_zones)),
+                str(item.get("match_id", "")),
+                int(item.get("point_id", 0) or 0),
+            )
+        )
+        top_matches = matches[: payload.top_k]
+
+        return {
+            "query": {
+                "zones": query_zones,
+                "effets": query_effets,
+            },
+            "total_candidates": len(matches),
+            "best_match": top_matches[0] if top_matches else None,
+            "matches": top_matches,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sketch search error: {str(e)}")

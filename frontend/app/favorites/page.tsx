@@ -23,18 +23,18 @@ export default function FavoritesPage() {
         <div
             className="min-h-screen"
             style={{
-                background: '#1c1c1e',
-                color: '#f5f5f7',
+                background: 'var(--background)',
+                color: 'var(--foreground)',
             }}
         >
             {/* Header */}
             <header
                 className="sticky top-0 z-50"
                 style={{
-                    background: 'rgba(44, 44, 46, 0.8)',
+                    background: 'color-mix(in srgb, var(--card) 80%, transparent)',
                     backdropFilter: 'blur(15px)',
                     WebkitBackdropFilter: 'blur(15px)',
-                    borderBottom: '1px solid #3a3a3c',
+                    borderBottom: '1px solid var(--border)',
                 }}
             >
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -42,7 +42,7 @@ export default function FavoritesPage() {
                         <Link
                             href="/search"
                             className="flex items-center gap-2 transition-colors"
-                            style={{ color: '#86868b' }}
+                            style={{ color: 'var(--muted-foreground)' }}
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.25" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -67,7 +67,7 @@ export default function FavoritesPage() {
             <main className="max-w-7xl mx-auto px-6 py-10">
                 {favorites.length === 0 ? (
                     <div className="text-center py-20">
-                        <p className="text-lg" style={{ color: '#86868b' }}>
+                        <p className="text-lg" style={{ color: 'var(--muted-foreground)' }}>
                             Aucun favori pour l&apos;instant.
                         </p>
                         <Link
@@ -99,14 +99,14 @@ export default function FavoritesPage() {
                                     <div className="pt-3 pb-2 px-0">
                                         <div
                                             className="text-sm font-medium"
-                                            style={{ fontFamily: "'Roboto', Arial, sans-serif", color: '#f5f5f7' }}
+                                            style={{ fontFamily: "'Roboto', Arial, sans-serif", color: 'var(--foreground)' }}
                                         >
                                             {fav.title || fav.id}
                                         </div>
                                         {fav.matchLabel && (
                                             <div
                                                 className="text-xs mt-1"
-                                                style={{ fontFamily: "'Roboto', Arial, sans-serif", color: '#aaaaaa' }}
+                                                style={{ fontFamily: "'Roboto', Arial, sans-serif", color: 'var(--muted-foreground)' }}
                                             >
                                                 {fav.matchLabel}
                                             </div>

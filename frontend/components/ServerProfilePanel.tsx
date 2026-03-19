@@ -41,6 +41,14 @@ interface Props {
     apiUrl: string;
 }
 
+const PANEL_BG = "var(--viz-panel-bg)";
+const PANEL_BORDER = "var(--viz-panel-border)";
+const SURFACE_BG = "var(--viz-surface)";
+const SURFACE_MUTED = "var(--viz-surface-muted)";
+const FOREGROUND = "var(--foreground)";
+const MUTED_TEXT = "var(--viz-text-muted)";
+const PANEL_SHADOW = "var(--viz-shadow)";
+
 // ─── Circular gauge ───────────────────────────────────────────
 function WinRateGauge({ rate, total, won }: { rate: number; total: number; won: number }) {
     const r = 44, cx = 50, cy = 50, stroke = 7;
@@ -51,7 +59,7 @@ function WinRateGauge({ rate, total, won }: { rate: number; total: number; won: 
     return (
         <div className="flex flex-col items-center">
             <svg width="110" height="110" viewBox="0 0 100 100">
-                <circle cx={cx} cy={cy} r={r} fill="none" stroke="#2c2c2e" strokeWidth={stroke} />
+                <circle cx={cx} cy={cy} r={r} fill="none" stroke={SURFACE_BG} strokeWidth={stroke} />
                 <circle
                     cx={cx} cy={cy} r={r} fill="none"
                     stroke={color} strokeWidth={stroke}
@@ -61,16 +69,16 @@ function WinRateGauge({ rate, total, won }: { rate: number; total: number; won: 
                     transform="rotate(-90 50 50)"
                     style={{ transition: "stroke-dashoffset 1s ease" }}
                 />
-                <text x={cx} y={cy - 4} textAnchor="middle" fill="#f5f5f7"
+                <text x={cx} y={cy - 4} textAnchor="middle" fill={FOREGROUND}
                     style={{ fontSize: "18px", fontFamily: "'Playfair Display', serif", fontWeight: 600 }}>
                     {rate}%
                 </text>
-                <text x={cx} y={cy + 14} textAnchor="middle" fill="#86868b"
+                <text x={cx} y={cy + 14} textAnchor="middle" fill={MUTED_TEXT}
                     style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
                     {won}/{total} pts
                 </text>
             </svg>
-            <span className="text-[10px] mt-1" style={{ color: "#86868b", fontFamily: "'Inter', sans-serif" }}>
+            <span className="text-[10px] mt-1" style={{ color: MUTED_TEXT, fontFamily: "'Inter', sans-serif" }}>
                 Win Rate au Service
             </span>
         </div>
@@ -106,14 +114,14 @@ function TableHeatmap({ zones }: { zones: ZoneStat[] }) {
 
     return (
         <div className="flex flex-col items-center">
-            <span className="text-[10px] mb-2" style={{ color: "#86868b", fontFamily: "'Inter', sans-serif" }}>
+            <span className="text-[10px] mb-2" style={{ color: MUTED_TEXT, fontFamily: "'Inter', sans-serif" }}>
                 Zones de Service — fréquence & efficacité
             </span>
             <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}>
                 {/* Column labels */}
                 {cols.map((c, ci) => (
                     <text key={c} x={labelW + ci * (cellW + pad) + cellW / 2} y={12}
-                        textAnchor="middle" fill="#86868b"
+                        textAnchor="middle" fill={MUTED_TEXT}
                         style={{ fontSize: "9px", fontFamily: "'Inter', sans-serif" }}>
                         {colLabels[ci]}
                     </text>
@@ -123,7 +131,7 @@ function TableHeatmap({ zones }: { zones: ZoneStat[] }) {
                     <g key={r}>
                         {/* Row label */}
                         <text x={labelW - 6} y={labelH + ri * (cellH + pad) + cellH / 2 + 3}
-                            textAnchor="end" fill="#86868b"
+                            textAnchor="end" fill={MUTED_TEXT}
                             style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
                             {rowLabels[ri]}
                         </text>
@@ -139,17 +147,17 @@ function TableHeatmap({ zones }: { zones: ZoneStat[] }) {
                             return (
                                 <g key={key}>
                                     <rect x={x} y={y} width={cellW} height={cellH} rx={6}
-                                        fill={count > 0 ? getColor(count, winRate) : "#2c2c2e"}
-                                        stroke="#3a3a3c" strokeWidth={0.5} />
+                                        fill={count > 0 ? getColor(count, winRate) : SURFACE_MUTED}
+                                        stroke={PANEL_BORDER} strokeWidth={0.5} />
                                     {count > 0 && (
                                         <>
                                             <text x={x + cellW / 2} y={y + 15} textAnchor="middle"
-                                                fill="#f5f5f7"
+                                                fill={FOREGROUND}
                                                 style={{ fontSize: "11px", fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>
                                                 {pct}%
                                             </text>
                                             <text x={x + cellW / 2} y={y + 28} textAnchor="middle"
-                                                fill="rgba(245,245,247,0.6)"
+                                                fill={MUTED_TEXT}
                                                 style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
                                                 W:{winRate}%
                                             </text>
@@ -163,7 +171,7 @@ function TableHeatmap({ zones }: { zones: ZoneStat[] }) {
                 {/* Table border */}
                 <rect x={labelW - 1} y={labelH - 1}
                     width={cols.length * (cellW + pad) + 2} height={rows.length * (cellH + pad) + 2}
-                    rx={8} fill="none" stroke="#3a3a3c" strokeWidth={1} />
+                    rx={8} fill="none" stroke={PANEL_BORDER} strokeWidth={1} />
                 {/* Net line */}
                 <line x1={labelW} y1={labelH + rows.length * (cellH + pad) + 4}
                     x2={labelW + cols.length * (cellW + pad)}
@@ -189,7 +197,7 @@ function RallyChart({ data }: { data: RallyBucket[] }) {
 
     return (
         <div className="flex flex-col">
-            <span className="text-[10px] mb-2" style={{ color: "#86868b", fontFamily: "'Inter', sans-serif" }}>
+            <span className="text-[10px] mb-2" style={{ color: MUTED_TEXT, fontFamily: "'Inter', sans-serif" }}>
                 Distribution des rallies (nb coups)
             </span>
             <svg width="100%" height={chartH + 20} viewBox={`0 0 ${svgW} ${chartH + 20}`} preserveAspectRatio="xMidYMax meet">
@@ -201,11 +209,11 @@ function RallyChart({ data }: { data: RallyBucket[] }) {
                             <rect x={x} y={chartH - h} width={barW} height={h} rx={3}
                                 fill="url(#barGrad)" opacity={0.9} />
                             <text x={x + barW / 2} y={chartH + 12} textAnchor="middle"
-                                fill="#86868b" style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
+                                fill={MUTED_TEXT} style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
                                 {d.shots}
                             </text>
                             <text x={x + barW / 2} y={chartH - h - 3} textAnchor="middle"
-                                fill="#f5f5f7" style={{ fontSize: "7px", fontFamily: "'Inter', sans-serif" }}>
+                                fill={FOREGROUND} style={{ fontSize: "7px", fontFamily: "'Inter', sans-serif" }}>
                                 {d.count}
                             </text>
                         </g>
@@ -238,14 +246,14 @@ function LateralityDonut({ data }: { data: LateralityStat[] }) {
         const pct = d.count / total;
         const dash = circ * pct;
         const gap = circ - dash;
-        const arc = { ...d, dash, gap, offset, color: colors[d.type] || "#86868b", pct };
+        const arc = { ...d, dash, gap, offset, color: colors[d.type] || MUTED_TEXT, pct };
         offset += dash;
         return arc;
     });
 
     return (
         <div className="flex flex-col items-center">
-            <span className="text-[10px] mb-2" style={{ color: "#86868b", fontFamily: "'Inter', sans-serif" }}>
+            <span className="text-[10px] mb-2" style={{ color: MUTED_TEXT, fontFamily: "'Inter', sans-serif" }}>
                 Latéralité du service
             </span>
             <div className="flex items-center gap-3">
@@ -259,7 +267,7 @@ function LateralityDonut({ data }: { data: LateralityStat[] }) {
                             style={{ transition: "all 0.8s ease" }}
                         />
                     ))}
-                    <text x={cx} y={cy + 4} textAnchor="middle" fill="#f5f5f7"
+                    <text x={cx} y={cy + 4} textAnchor="middle" fill={FOREGROUND}
                         style={{ fontSize: "10px", fontFamily: "'Playfair Display', serif" }}>
                         {total}
                     </text>
@@ -268,10 +276,10 @@ function LateralityDonut({ data }: { data: LateralityStat[] }) {
                     {arcs.map(a => (
                         <div key={a.type} className="flex items-center gap-1.5">
                             <div className="w-2.5 h-2.5 rounded-full" style={{ background: a.color }} />
-                            <span className="text-[10px]" style={{ color: "#f5f5f7", fontFamily: "'Inter', sans-serif" }}>
+                            <span className="text-[10px]" style={{ color: FOREGROUND, fontFamily: "'Inter', sans-serif" }}>
                                 {a.type === "coup_droit" ? "CD" : "RV"} {Math.round(a.pct * 100)}%
                             </span>
-                            <span className="text-[9px]" style={{ color: "#86868b" }}>
+                            <span className="text-[9px]" style={{ color: MUTED_TEXT }}>
                                 W:{a.win_rate}%
                             </span>
                         </div>
@@ -293,7 +301,7 @@ function HorizontalBars({ data, label, colorFn }: {
 
     return (
         <div className="flex flex-col">
-            <span className="text-[10px] mb-2" style={{ color: "#86868b", fontFamily: "'Inter', sans-serif" }}>
+            <span className="text-[10px] mb-2" style={{ color: MUTED_TEXT, fontFamily: "'Inter', sans-serif" }}>
                 {label}
             </span>
             <div className="space-y-1.5">
@@ -302,16 +310,16 @@ function HorizontalBars({ data, label, colorFn }: {
                     const color = colorFn ? colorFn(d.key) : "#0a84ff";
                     return (
                         <div key={d.key} className="flex items-center gap-2">
-                            <span className="text-[9px] w-16 text-right truncate" style={{ color: "#aaa", fontFamily: "'Inter', sans-serif" }}>
+                            <span className="text-[9px] w-16 text-right truncate" style={{ color: MUTED_TEXT, fontFamily: "'Inter', sans-serif" }}>
                                 {d.key}
                             </span>
-                            <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: "#2c2c2e" }}>
+                            <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: SURFACE_BG }}>
                                 <div className="h-full rounded-full" style={{
                                     width: `${pct}%`, background: color,
                                     transition: "width 0.8s ease"
                                 }} />
                             </div>
-                            <span className="text-[9px] w-6" style={{ color: "#f5f5f7", fontFamily: "'Inter', sans-serif" }}>
+                            <span className="text-[9px] w-6" style={{ color: FOREGROUND, fontFamily: "'Inter', sans-serif" }}>
                                 {d.value}
                             </span>
                         </div>
@@ -328,7 +336,7 @@ function SetTrend({ data }: { data: SetStat[] }) {
 
     return (
         <div className="flex flex-col">
-            <span className="text-[10px] mb-2" style={{ color: "#86868b", fontFamily: "'Inter', sans-serif" }}>
+            <span className="text-[10px] mb-2" style={{ color: MUTED_TEXT, fontFamily: "'Inter', sans-serif" }}>
                 Évolution par set
             </span>
             <div className="flex gap-2">
@@ -336,12 +344,12 @@ function SetTrend({ data }: { data: SetStat[] }) {
                     const color = s.win_rate >= 60 ? "#34d399" : s.win_rate >= 45 ? "#fbbf24" : "#f87171";
                     return (
                         <div key={s.set} className="flex flex-col items-center gap-1 flex-1 p-2 rounded-lg"
-                            style={{ background: "rgba(44,44,46,0.5)", border: "1px solid #3a3a3c" }}>
-                            <span className="text-[9px]" style={{ color: "#86868b" }}>Set {s.set}</span>
+                            style={{ background: SURFACE_MUTED, border: `1px solid ${PANEL_BORDER}` }}>
+                            <span className="text-[9px]" style={{ color: MUTED_TEXT }}>Set {s.set}</span>
                             <span className="text-sm font-semibold" style={{ color, fontFamily: "'Playfair Display', serif" }}>
                                 {s.win_rate}%
                             </span>
-                            <span className="text-[8px]" style={{ color: "#86868b" }}>
+                            <span className="text-[8px]" style={{ color: MUTED_TEXT }}>
                                 {s.won}/{s.total} · {s.avg_rally}c
                             </span>
                         </div>
@@ -382,17 +390,18 @@ export default function ServerProfilePanel({ serverName, matchId, apiUrl }: Prop
         <div
             className="rounded-2xl overflow-hidden"
             style={{
-                background: "rgba(44, 44, 46, 0.6)",
+                background: PANEL_BG,
                 backdropFilter: "blur(20px)",
                 WebkitBackdropFilter: "blur(20px)",
-                border: "1px solid #3a3a3c",
+                border: `1px solid ${PANEL_BORDER}`,
+                boxShadow: PANEL_SHADOW,
             }}
         >
             {/* Header */}
             <button
                 onClick={() => setCollapsed(!collapsed)}
                 className="w-full px-4 py-3 flex items-center justify-between"
-                style={{ borderBottom: collapsed ? "none" : "1px solid #3a3a3c" }}
+                style={{ borderBottom: collapsed ? "none" : `1px solid ${PANEL_BORDER}` }}
             >
                 <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs"
@@ -400,16 +409,16 @@ export default function ServerProfilePanel({ serverName, matchId, apiUrl }: Prop
                         {serverName?.charAt(0)}
                     </div>
                     <div className="text-left">
-                        <div className="text-xs font-semibold" style={{ color: "#f5f5f7", fontFamily: "'Inter', sans-serif" }}>
+                        <div className="text-xs font-semibold" style={{ color: FOREGROUND, fontFamily: "'Inter', sans-serif" }}>
                             Profil Serveur
                         </div>
-                        <div className="text-[10px]" style={{ color: "#86868b", fontFamily: "'Inter', sans-serif" }}>
+                        <div className="text-[10px]" style={{ color: MUTED_TEXT, fontFamily: "'Inter', sans-serif" }}>
                             {serverName?.replace(/_/g, " ")}
                         </div>
                     </div>
                 </div>
                 <svg className={`w-4 h-4 transition-transform ${collapsed ? "" : "rotate-180"}`}
-                    fill="none" stroke="#86868b" strokeWidth={2} viewBox="0 0 24 24">
+                    fill="none" stroke={MUTED_TEXT} strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
@@ -429,29 +438,29 @@ export default function ServerProfilePanel({ serverName, matchId, apiUrl }: Prop
                             <div className="flex flex-col md:flex-row items-center gap-6">
                                 <WinRateGauge rate={profile.win_rate} total={profile.total_service_points} won={profile.points_won} />
                                 <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
-                                    <div className="p-3 rounded-xl text-center" style={{ background: "#2c2c2e" }}>
-                                        <div className="text-2xl font-semibold" style={{ color: "#f5f5f7", fontFamily: "'Playfair Display', serif" }}>
+                                    <div className="p-3 rounded-xl text-center" style={{ background: SURFACE_BG, border: `1px solid ${PANEL_BORDER}` }}>
+                                        <div className="text-2xl font-semibold" style={{ color: FOREGROUND, fontFamily: "'Playfair Display', serif" }}>
                                             {profile.avg_rally_length}
                                         </div>
-                                        <div className="text-xs mt-1" style={{ color: "#86868b" }}>Coups moy.</div>
+                                        <div className="text-xs mt-1" style={{ color: MUTED_TEXT }}>Coups moy.</div>
                                     </div>
-                                    <div className="p-3 rounded-xl text-center" style={{ background: "#2c2c2e" }}>
-                                        <div className="text-2xl font-semibold" style={{ color: "#f5f5f7", fontFamily: "'Playfair Display', serif" }}>
+                                    <div className="p-3 rounded-xl text-center" style={{ background: SURFACE_BG, border: `1px solid ${PANEL_BORDER}` }}>
+                                        <div className="text-2xl font-semibold" style={{ color: FOREGROUND, fontFamily: "'Playfair Display', serif" }}>
                                             {profile.avg_duration_seconds}s
                                         </div>
-                                        <div className="text-xs mt-1" style={{ color: "#86868b" }}>Durée moy.</div>
+                                        <div className="text-xs mt-1" style={{ color: MUTED_TEXT }}>Durée moy.</div>
                                     </div>
-                                    <div className="p-3 rounded-xl text-center" style={{ background: "#2c2c2e" }}>
+                                    <div className="p-3 rounded-xl text-center" style={{ background: SURFACE_BG, border: `1px solid ${PANEL_BORDER}` }}>
                                         <div className="text-2xl font-semibold" style={{ color: "#0a84ff", fontFamily: "'Playfair Display', serif" }}>
                                             {profile.total_service_points}
                                         </div>
-                                        <div className="text-xs mt-1" style={{ color: "#86868b" }}>Points servis</div>
+                                        <div className="text-xs mt-1" style={{ color: MUTED_TEXT }}>Points servis</div>
                                     </div>
-                                    <div className="p-3 rounded-xl text-center" style={{ background: "#2c2c2e" }}>
+                                    <div className="p-3 rounded-xl text-center" style={{ background: SURFACE_BG, border: `1px solid ${PANEL_BORDER}` }}>
                                         <div className="text-2xl font-semibold" style={{ color: "#34d399", fontFamily: "'Playfair Display', serif" }}>
                                             {profile.points_won}
                                         </div>
-                                        <div className="text-xs mt-1" style={{ color: "#86868b" }}>Points gagnés</div>
+                                        <div className="text-xs mt-1" style={{ color: MUTED_TEXT }}>Points gagnés</div>
                                     </div>
                                 </div>
                             </div>
@@ -477,7 +486,7 @@ export default function ServerProfilePanel({ serverName, matchId, apiUrl }: Prop
                                 <HorizontalBars
                                     data={profile.faults.map(f => ({ key: f.type, value: f.count }))}
                                     label="Types de conclusion"
-                                    colorFn={(k) => faultColors[k] || "#86868b"}
+                                    colorFn={(k) => faultColors[k] || MUTED_TEXT}
                                 />
                                 <SetTrend data={profile.by_set} />
                             </div>
@@ -485,7 +494,7 @@ export default function ServerProfilePanel({ serverName, matchId, apiUrl }: Prop
                     )}
 
                     {!loading && !profile && (
-                        <p className="text-center text-xs py-4" style={{ color: "#86868b" }}>
+                        <p className="text-center text-xs py-4" style={{ color: MUTED_TEXT }}>
                             Données non disponibles
                         </p>
                     )}

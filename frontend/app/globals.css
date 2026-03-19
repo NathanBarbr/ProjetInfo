@@ -73,21 +73,30 @@
   --primary: #0a84ff;
   --primary-foreground: #ffffff;
 
-  --secondary: #e5e5e7;
+  --secondary: #dddddf;
   --secondary-foreground: #1c1c1e;
 
-  --muted: #e5e5e7;
-  --muted-foreground: #86868b;
+  --muted: #e2e2e6;
+  --muted-foreground: #6b7280;
 
-  --accent: #e5e5e7;
+  --accent: #e2e2e6;
   --accent-foreground: #1c1c1e;
 
   --destructive: #ff453a;
   --destructive-foreground: #ffffff;
 
-  --border: #d1d1d6;
-  --input: #e5e5e7;
+  --border: #c5c7ce;
+  --input: #e2e2e6;
   --ring: #0a84ff;
+
+  --viz-panel-bg: rgba(248, 248, 250, 0.94);
+  --viz-panel-border: #c5c7ce;
+  --viz-surface: #f4f4f6;
+  --viz-surface-muted: #eceef2;
+  --viz-grid: #cbd5e1;
+  --viz-text-muted: #5f6b7a;
+  --viz-tooltip-bg: rgba(255, 255, 255, 0.97);
+  --viz-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
 /* Dark Mode - Modern Luxury Editorial (Primary) */
@@ -119,6 +128,15 @@
   --border: #3a3a3c;
   --input: #3a3a3c;
   --ring: #0a84ff;
+
+  --viz-panel-bg: rgba(44, 44, 46, 0.72);
+  --viz-panel-border: #3a3a3c;
+  --viz-surface: #2c2c2e;
+  --viz-surface-muted: #1f1f21;
+  --viz-grid: #3a3a3c;
+  --viz-text-muted: #86868b;
+  --viz-tooltip-bg: rgba(28, 28, 30, 0.95);
+  --viz-shadow: 0 20px 40px rgba(0, 0, 0, 0.28);
 }
 
 body {

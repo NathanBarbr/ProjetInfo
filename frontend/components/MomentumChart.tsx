@@ -35,6 +35,13 @@ export default function MomentumChart({ matchId, apiUrl, currentPointId, onPoint
     const [data, setData] = useState<MomentumData | null>(null);
     const [loading, setLoading] = useState(false);
     const [hovered, setHovered] = useState<number | null>(null);
+    const panelBackground = "var(--viz-panel-bg)";
+    const panelBorder = "var(--viz-panel-border)";
+    const panelShadow = "var(--viz-shadow)";
+    const mutedText = "var(--viz-text-muted)";
+    const foreground = "var(--foreground)";
+    const gridColor = "var(--viz-grid)";
+    const tooltipBackground = "var(--viz-tooltip-bg)";
 
     useEffect(() => {
         if (!matchId) return;
@@ -48,7 +55,7 @@ export default function MomentumChart({ matchId, apiUrl, currentPointId, onPoint
 
     if (loading) {
         return (
-            <div className="rounded-2xl p-5" style={{ background: "rgba(44,44,46,0.6)", border: "1px solid #3a3a3c" }}>
+            <div className="rounded-2xl p-5" style={{ background: panelBackground, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
                 <div className="flex justify-center py-8">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
                 </div>
@@ -107,22 +114,24 @@ export default function MomentumChart({ matchId, apiUrl, currentPointId, onPoint
     return (
         <div className="rounded-2xl overflow-hidden p-5"
             style={{
-                background: "rgba(44, 44, 46, 0.6)",
+                background: panelBackground,
                 backdropFilter: "blur(20px)",
-                border: "1px solid #3a3a3c",
+                WebkitBackdropFilter: "blur(20px)",
+                border: `1px solid ${panelBorder}`,
+                boxShadow: panelShadow,
             }}>
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold" style={{ color: "#f5f5f7", fontFamily: "'Inter', sans-serif" }}>
+                <h3 className="text-sm font-semibold" style={{ color: foreground, fontFamily: "'Inter', sans-serif" }}>
                     Momentum du match
                 </h3>
                 <div className="flex items-center gap-3 text-[11px]" style={{ fontFamily: "'Inter', sans-serif" }}>
                     <span className="flex items-center gap-1.5">
                         <span className="w-3 h-3 rounded-full" style={{ background: "#30d158" }} />
-                        <span style={{ color: "#f5f5f7" }}>{player_A.replace(/_/g, " ")}</span>
+                        <span style={{ color: foreground }}>{player_A.replace(/_/g, " ")}</span>
                     </span>
                     <span className="flex items-center gap-1.5">
                         <span className="w-3 h-3 rounded-full" style={{ background: "#ff453a" }} />
-                        <span style={{ color: "#f5f5f7" }}>{player_B.replace(/_/g, " ")}</span>
+                        <span style={{ color: foreground }}>{player_B.replace(/_/g, " ")}</span>
                     </span>
                 </div>
             </div>
@@ -169,7 +178,7 @@ export default function MomentumChart({ matchId, apiUrl, currentPointId, onPoint
 
                 {/* Center line */}
                 <line x1={padX} y1={midY} x2={W - padX} y2={midY}
-                    stroke="#3a3a3c" strokeWidth={1} strokeDasharray="4 4" />
+                    stroke={gridColor} strokeWidth={1} strokeDasharray="4 4" />
 
                 {/* Set boundary lines */}
                 {setBoundaries.map((b, i) => (
@@ -191,15 +200,15 @@ export default function MomentumChart({ matchId, apiUrl, currentPointId, onPoint
                 </text>
 
                 {/* Y-axis labels */}
-                <text x={padX - 5} y={padY + 4} textAnchor="end" fill="#86868b"
+                <text x={padX - 5} y={padY + 4} textAnchor="end" fill={mutedText}
                     style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
                     +{maxDiff}
                 </text>
-                <text x={padX - 5} y={midY + 3} textAnchor="end" fill="#86868b"
+                <text x={padX - 5} y={midY + 3} textAnchor="end" fill={mutedText}
                     style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
                     0
                 </text>
-                <text x={padX - 5} y={H - padY + 4} textAnchor="end" fill="#86868b"
+                <text x={padX - 5} y={H - padY + 4} textAnchor="end" fill={mutedText}
                     style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
                     -{maxDiff}
                 </text>
@@ -239,16 +248,16 @@ export default function MomentumChart({ matchId, apiUrl, currentPointId, onPoint
                 {hovered !== null && hoveredPoint && (
                     <g>
                         <line x1={hoveredX} y1={padY} x2={hoveredX} y2={H - padY}
-                            stroke="#f5f5f7" strokeWidth={0.5} opacity={0.3} />
+                            stroke={foreground} strokeWidth={0.5} opacity={0.25} />
                         <circle cx={hoveredX} cy={hoveredY} r={5}
                             fill="#0a84ff" stroke="#fff" strokeWidth={2} />
                         <rect x={hoveredX - 55} y={hoveredY - 42} width={110} height={36}
-                            rx={6} fill="rgba(28,28,30,0.95)" stroke="#3a3a3c" />
-                        <text x={hoveredX} y={hoveredY - 26} textAnchor="middle" fill="#f5f5f7"
+                            rx={6} fill={tooltipBackground} stroke={panelBorder} />
+                        <text x={hoveredX} y={hoveredY - 26} textAnchor="middle" fill={foreground}
                             style={{ fontSize: "9px", fontFamily: "'Inter', sans-serif", fontWeight: 600 }}>
                             Pt {hoveredPoint.point_id + 1} — {hoveredPoint.score_A}:{hoveredPoint.score_B}
                         </text>
-                        <text x={hoveredX} y={hoveredY - 14} textAnchor="middle" fill="#86868b"
+                        <text x={hoveredX} y={hoveredY - 14} textAnchor="middle" fill={mutedText}
                             style={{ fontSize: "8px", fontFamily: "'Inter', sans-serif" }}>
                             {hoveredPoint.diff > 0 ? player_A.split("-").pop() : player_B.split("-").pop()} +{Math.abs(hoveredPoint.diff)}
                         </text>

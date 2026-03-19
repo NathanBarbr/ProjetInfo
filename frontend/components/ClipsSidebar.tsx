@@ -30,6 +30,11 @@ export default function ClipsSidebar({
     apiUrl,
 }: ClipsSidebarProps) {
     const [selectedSet, setSelectedSet] = useState<string | null>(null); // null = All
+    const foreground = "var(--foreground)";
+    const mutedText = "var(--muted-foreground)";
+    const card = "var(--card)";
+    const secondary = "var(--secondary)";
+    const border = "var(--border)";
 
     if (!clipsData || Object.keys(clipsData.sets).length === 0) {
         return null;
@@ -65,7 +70,7 @@ export default function ClipsSidebar({
                         className="text-base font-medium"
                         style={{
                             fontFamily: "'Roboto', Arial, sans-serif",
-                            color: '#f5f5f7',
+                            color: foreground,
                         }}
                     >
                         Points du match
@@ -74,7 +79,7 @@ export default function ClipsSidebar({
                         className="text-sm"
                         style={{
                             fontFamily: "'Roboto', Arial, sans-serif",
-                            color: '#aaaaaa',
+                            color: mutedText,
                         }}
                     >
                         {clipsData.total_clips}
@@ -91,9 +96,9 @@ export default function ClipsSidebar({
                     style={{
                         fontFamily: "'Roboto', Arial, sans-serif",
                         borderRadius: '8px',
-                        background: selectedSet === null ? '#f5f5f7' : 'rgba(255, 255, 255, 0.1)',
-                        color: selectedSet === null ? '#0f0f0f' : '#f5f5f7',
-                        border: 'none',
+                        background: selectedSet === null ? foreground : secondary,
+                        color: selectedSet === null ? 'var(--background)' : foreground,
+                        border: `1px solid ${selectedSet === null ? foreground : border}`,
                         fontWeight: 500,
                     }}
                 >
@@ -109,9 +114,9 @@ export default function ClipsSidebar({
                         style={{
                             fontFamily: "'Roboto', Arial, sans-serif",
                             borderRadius: '8px',
-                            background: selectedSet === setNum ? '#f5f5f7' : 'rgba(255, 255, 255, 0.1)',
-                            color: selectedSet === setNum ? '#0f0f0f' : '#f5f5f7',
-                            border: 'none',
+                            background: selectedSet === setNum ? foreground : secondary,
+                            color: selectedSet === setNum ? 'var(--background)' : foreground,
+                            border: `1px solid ${selectedSet === setNum ? foreground : border}`,
                             fontWeight: 500,
                         }}
                     >
@@ -126,7 +131,7 @@ export default function ClipsSidebar({
                 style={{
                     maxHeight: 'calc(100vh - 220px)',
                     scrollbarWidth: 'thin',
-                    scrollbarColor: '#3a3a3c transparent',
+                    scrollbarColor: `${border} transparent`,
                 }}
             >
                 {displayedClips.map(({ clip, setNum }, index) => {
@@ -138,10 +143,10 @@ export default function ClipsSidebar({
                             onClick={() => onClipSelect(clip.id)}
                             className="w-full flex gap-2 p-0 text-left transition-all duration-150 group rounded-lg"
                             style={{
-                                background: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                                background: isActive ? secondary : 'transparent',
                             }}
                             onMouseEnter={(e) => {
-                                if (!isActive) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                                if (!isActive) e.currentTarget.style.background = 'color-mix(in srgb, var(--secondary) 72%, transparent)';
                             }}
                             onMouseLeave={(e) => {
                                 if (!isActive) e.currentTarget.style.background = 'transparent';
@@ -152,7 +157,7 @@ export default function ClipsSidebar({
                                 className="w-6 flex-shrink-0 flex items-center justify-center text-xs"
                                 style={{
                                     fontFamily: "'Roboto', Arial, sans-serif",
-                                    color: isActive ? '#f5f5f7' : '#aaaaaa',
+                                    color: isActive ? foreground : mutedText,
                                 }}
                             >
                                 {index + 1}
@@ -173,12 +178,12 @@ export default function ClipsSidebar({
                                 ) : (
                                     <div
                                         className="w-full h-full flex items-center justify-center"
-                                        style={{ background: '#2c2c2e' }}
+                                        style={{ background: card }}
                                     >
                                         <svg
                                             className="w-8 h-8"
                                             fill="none"
-                                            stroke="#aaaaaa"
+                                            stroke={mutedText}
                                             strokeWidth="1"
                                             viewBox="0 0 24 24"
                                         >
@@ -226,7 +231,7 @@ export default function ClipsSidebar({
                                     className="text-sm font-medium line-clamp-2 leading-snug mb-1"
                                     style={{
                                         fontFamily: "'Roboto', Arial, sans-serif",
-                                        color: '#f5f5f7',
+                                        color: foreground,
                                     }}
                                 >
                                     Point {clip.point}
@@ -235,7 +240,7 @@ export default function ClipsSidebar({
                                     className="text-xs"
                                     style={{
                                         fontFamily: "'Roboto', Arial, sans-serif",
-                                        color: '#aaaaaa',
+                                        color: mutedText,
                                     }}
                                 >
                                     Set {setNum}

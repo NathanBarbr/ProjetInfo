@@ -24,6 +24,15 @@ class ElasticSearchIndexer:
     """
     
     INDEX_NAME = "tennis_points"
+    HIGHLIGHT_WEIGHT_DEFAULTS = {
+        "duration": 35.0,
+        "rally_depth": 15.0,
+        "effects_variety": 15.0,
+        "laterality_variety": 10.0,
+        "zone_variety": 10.0,
+        "finish": 10.0,
+        "pressure": 5.0,
+    }
 
     @staticmethod
     def _safe_float(value: Any) -> float:
@@ -69,11 +78,46 @@ class ElasticSearchIndexer:
         return score_b >= 11 and (score_b - score_a) >= 2
 
     @classmethod
-    def compute_highlight_score(cls, point: Dict[str, Any]) -> float:
+    def resolve_highlight_weights(cls, weights: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
+        resolved = dict(cls.HIGHLIGHT_WEIGHT_DEFAULTS)
+        if weights:
+            for key, value in weights.items():
+                if key in resolved and value is not None:
+                    resolved[key] = max(0.0, cls._safe_float(value))
+
+        total = sum(resolved.values())
+        if total <= 0:
+            return dict(cls.HIGHLIGHT_WEIGHT_DEFAULTS)
+
+        return {
+            key: round((value / total) * 100, 4)
+            for key, value in resolved.items()
+        }
+
+    @classmethod
+    def _normalized_highlight_weights(cls, weights: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
+        return {
+            key: value / 100.0
+            for key, value in cls.resolve_highlight_weights(weights).items()
+        }
+
+    @classmethod
+    def _uses_default_highlight_weights(cls, weights: Optional[Dict[str, Any]] = None) -> bool:
+        resolved = cls.resolve_highlight_weights(weights)
+        defaults = cls.resolve_highlight_weights(cls.HIGHLIGHT_WEIGHT_DEFAULTS)
+        return all(abs(resolved[key] - defaults[key]) < 1e-6 for key in defaults)
+
+    @classmethod
+    def compute_highlight_score(
+        cls,
+        point: Dict[str, Any],
+        weights: Optional[Dict[str, Any]] = None
+    ) -> float:
         duration = cls._safe_float(point.get("duree_secondes", 0.0))
         nb_coups = cls._safe_int(point.get("nb_coups", 0))
         faute_type = str(point.get("faute_type", "") or "")
         dernier_coup = str(point.get("dernier_coup", "") or "")
+        normalized_weights = cls._normalized_highlight_weights(weights)
 
         effets = [e for e in cls._split_sequence(point.get("sequence_effets", "")) if e != "service"]
         lateralites = cls._split_sequence(point.get("sequence_lateralites", ""))
@@ -111,13 +155,13 @@ class ElasticSearchIndexer:
             pressure_score = 0.45
 
         score = (
-            0.35 * duration_score
-            + 0.15 * rally_depth_score
-            + 0.15 * effects_variety_score
-            + 0.10 * laterality_variety_score
-            + 0.10 * zone_variety_score
-            + 0.10 * finish_score
-            + 0.05 * pressure_score
+            normalized_weights["duration"] * duration_score
+            + normalized_weights["rally_depth"] * rally_depth_score
+            + normalized_weights["effects_variety"] * effects_variety_score
+            + normalized_weights["laterality_variety"] * laterality_variety_score
+            + normalized_weights["zone_variety"] * zone_variety_score
+            + normalized_weights["finish"] * finish_score
+            + normalized_weights["pressure"] * pressure_score
         )
         return round(score * 100, 2)
     
@@ -381,6 +425,7 @@ class ElasticSearchIndexer:
         self,
         k: int = 20,
         filters: Optional[Dict[str, Any]] = None,
+        weights: Optional[Dict[str, Any]] = None,
         candidate_limit: int = 2000
     ) -> List[Dict[str, Any]]:
         """
@@ -404,36 +449,43 @@ class ElasticSearchIndexer:
             if filter_clauses:
                 query = {"bool": {"filter": filter_clauses}}
 
-        response = self.client.search(
-            index=self.INDEX_NAME,
-            query=query,
-            size=k,
-            sort=[
-                {"highlight_score": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
-                {"duree_secondes": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
-                {"nb_coups": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}},
-            ],
-            source_excludes=["embedding"]
-        )
+        use_indexed_score = self._uses_default_highlight_weights(weights)
+        if use_indexed_score:
+            response = self.client.search(
+                index=self.INDEX_NAME,
+                query=query,
+                size=k,
+                sort=[
+                    {"highlight_score": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
+                    {"duree_secondes": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
+                    {"nb_coups": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}},
+                ],
+                source_excludes=["embedding"]
+            )
 
-        hits = response["hits"]["hits"]
-        if hits and hits[0].get("_source", {}).get("highlight_score") is not None:
-            results = []
-            for hit in hits:
-                result = hit["_source"]
-                result["_score"] = result.get("highlight_score", 0.0)
-                result["_id"] = hit["_id"]
-                results.append(result)
-            return results
+            hits = response["hits"]["hits"]
+            if hits and hits[0].get("_source", {}).get("highlight_score") is not None:
+                results = []
+                for hit in hits:
+                    result = hit["_source"]
+                    result["_score"] = result.get("highlight_score", 0.0)
+                    result["_id"] = hit["_id"]
+                    results.append(result)
+                return results
 
         count_response = self.client.count(index=self.INDEX_NAME, query=query)
-        candidate_size = min(max(k * 20, 200), candidate_limit, count_response["count"])
+        candidate_size = min(
+            max(k * (50 if not use_indexed_score else 20), 500 if not use_indexed_score else 200),
+            candidate_limit,
+            count_response["count"]
+        )
 
         fallback = self.client.search(
             index=self.INDEX_NAME,
             query=query,
             size=candidate_size,
             sort=[
+                {"highlight_score": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
                 {"duree_secondes": {"order": "desc", "missing": "_last", "unmapped_type": "float"}},
                 {"nb_coups": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}},
             ],
@@ -443,7 +495,7 @@ class ElasticSearchIndexer:
         rescored = []
         for hit in fallback["hits"]["hits"]:
             result = hit["_source"]
-            result["highlight_score"] = self.compute_highlight_score(result)
+            result["highlight_score"] = self.compute_highlight_score(result, weights=weights)
             result["_score"] = result["highlight_score"]
             result["_id"] = hit["_id"]
             rescored.append(result)

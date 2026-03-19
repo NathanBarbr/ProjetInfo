@@ -34,22 +34,30 @@ export default function Home() {
       });
   }, []);
 
+  const navButtonStyle = {
+    background: 'var(--secondary)',
+    border: '1px solid var(--border)',
+    borderRadius: '10px',
+    color: 'var(--foreground)',
+    fontFamily: "'Inter', sans-serif",
+  } as const;
+
   return (
     <div
       className="min-h-screen"
       style={{
-        background: '#1c1c1e',
-        color: '#f5f5f7',
+        background: 'var(--background)',
+        color: 'var(--foreground)',
       }}
     >
       {/* Header - Glassmorphism */}
       <header
         className="sticky top-0 z-50"
         style={{
-          background: 'rgba(44, 44, 46, 0.8)',
+          background: 'color-mix(in srgb, var(--card) 80%, transparent)',
           backdropFilter: 'blur(15px)',
           WebkitBackdropFilter: 'blur(15px)',
-          borderBottom: '1px solid #3a3a3c',
+          borderBottom: '1px solid var(--border)',
         }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -57,7 +65,7 @@ export default function Home() {
             className="text-xl font-semibold tracking-tight"
             style={{
               fontFamily: "'Playfair Display', Georgia, serif",
-              color: '#f5f5f7',
+              color: 'var(--foreground)',
               letterSpacing: '-0.02em',
             }}
           >
@@ -68,20 +76,14 @@ export default function Home() {
             <Link
               href="/search"
               className="flex items-center gap-2 px-4 py-2 text-sm transition-all duration-200"
-              style={{
-                background: 'rgba(58, 58, 60, 0.6)',
-                border: '1px solid #3a3a3c',
-                borderRadius: '10px',
-                color: '#f5f5f7',
-                fontFamily: "'Inter', sans-serif",
-              }}
+              style={navButtonStyle}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(10, 132, 255, 0.2)';
+                e.currentTarget.style.background = 'color-mix(in srgb, #0a84ff 12%, var(--card))';
                 e.currentTarget.style.borderColor = '#0a84ff';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(58, 58, 60, 0.6)';
-                e.currentTarget.style.borderColor = '#3a3a3c';
+                e.currentTarget.style.background = 'var(--secondary)';
+                e.currentTarget.style.borderColor = 'var(--border)';
               }}
             >
               <svg
@@ -98,20 +100,14 @@ export default function Home() {
             <Link
               href="/visualization"
               className="flex items-center gap-2 px-4 py-2 text-sm transition-all duration-200"
-              style={{
-                background: 'rgba(58, 58, 60, 0.6)',
-                border: '1px solid #3a3a3c',
-                borderRadius: '10px',
-                color: '#f5f5f7',
-                fontFamily: "'Inter', sans-serif",
-              }}
+              style={navButtonStyle}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)'; // Emerald color
+                e.currentTarget.style.background = 'color-mix(in srgb, #10b981 12%, var(--card))';
                 e.currentTarget.style.borderColor = '#10b981';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(58, 58, 60, 0.6)';
-                e.currentTarget.style.borderColor = '#3a3a3c';
+                e.currentTarget.style.background = 'var(--secondary)';
+                e.currentTarget.style.borderColor = 'var(--border)';
               }}
             >
               <svg
@@ -132,23 +128,38 @@ export default function Home() {
             <Link
               href="/compare"
               className="flex items-center gap-2 px-4 py-2 text-sm transition-all duration-200"
-              style={{
-                background: 'rgba(58, 58, 60, 0.6)',
-                border: '1px solid #3a3a3c',
-                borderRadius: '10px',
-                color: '#f5f5f7',
-                fontFamily: "'Inter', sans-serif",
-              }}
+              style={navButtonStyle}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 69, 58, 0.2)';
+                e.currentTarget.style.background = 'color-mix(in srgb, #ff453a 12%, var(--card))';
                 e.currentTarget.style.borderColor = '#ff453a';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(58, 58, 60, 0.6)';
-                e.currentTarget.style.borderColor = '#3a3a3c';
+                e.currentTarget.style.background = 'var(--secondary)';
+                e.currentTarget.style.borderColor = 'var(--border)';
               }}
             >
               Compare
+            </Link>
+            <Link
+              href="/sketch"
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-all duration-200"
+              style={{
+                background: 'var(--secondary)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                color: 'var(--foreground)',
+                fontFamily: "'Inter', sans-serif",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 159, 10, 0.1)';
+                e.currentTarget.style.borderColor = '#ff9f0a';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--secondary)';
+                e.currentTarget.style.borderColor = 'var(--border)';
+              }}
+            >
+              Sketch
             </Link>
           </div>
         </div>
@@ -162,7 +173,7 @@ export default function Home() {
             <div
               className="w-10 h-10 rounded-full animate-spin"
               style={{
-                border: '3px solid #3a3a3c',
+                border: '3px solid var(--border)',
                 borderTopColor: '#0a84ff',
               }}
             />
@@ -176,14 +187,14 @@ export default function Home() {
               className="text-sm"
               style={{
                 fontFamily: "'Inter', sans-serif",
-                color: '#86868b',
+                color: 'var(--muted-foreground)',
               }}
             >
               Unable to connect to server. Make sure the backend is running.
             </p>
             <code
               className="mt-2 text-xs block"
-              style={{ color: 'rgba(134, 134, 139, 0.8)' }}
+              style={{ color: 'color-mix(in srgb, var(--muted-foreground) 80%, transparent)' }}
             >
               uvicorn main:app --reload
             </code>
@@ -197,14 +208,14 @@ export default function Home() {
               className="w-20 h-20 mx-auto mb-4 flex items-center justify-center"
               style={{
                 borderRadius: '16px',
-                background: 'rgba(44, 44, 46, 0.8)',
-                border: '1px solid #3a3a3c',
+                background: 'color-mix(in srgb, var(--card) 84%, transparent)',
+                border: '1px solid var(--border)',
               }}
             >
               <svg
                 className="w-10 h-10"
                 fill="none"
-                stroke="#86868b"
+                stroke="var(--muted-foreground)"
                 strokeWidth="1.25"
                 viewBox="0 0 24 24"
               >
@@ -214,7 +225,7 @@ export default function Home() {
             <p
               style={{
                 fontFamily: "'Playfair Display', Georgia, serif",
-                color: '#86868b',
+                color: 'var(--muted-foreground)',
               }}
             >
               No videos available
@@ -223,7 +234,7 @@ export default function Home() {
               className="text-sm mt-1"
               style={{
                 fontFamily: "'Inter', sans-serif",
-                color: 'rgba(134, 134, 139, 0.8)',
+                color: 'color-mix(in srgb, var(--muted-foreground) 80%, transparent)',
               }}
             >
               Add videos to the backend/videos folder

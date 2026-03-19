@@ -6,6 +6,10 @@ Modular architecture with routers for better code organization.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from env_loader import load_backend_env
+
+load_backend_env()
+
 from routers import videos, search, chat, semantic, visualization
 
 app = FastAPI(title="Video Streaming API", version="0.3.0")

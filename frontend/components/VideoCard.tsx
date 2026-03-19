@@ -29,15 +29,12 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
 
                 {/* Fallback pattern (visible if img hidden) */}
                 <div
-                    className="absolute inset-0 flex items-center justify-center -z-10"
-                    style={{
-                        background: 'linear-gradient(135deg, #2c2c2e 0%, #1c1c1e 100%)',
-                    }}
+                    className="absolute inset-0 flex items-center justify-center -z-10 bg-card border border-border"
                 >
                     <svg
-                        className="w-12 h-12 transition-colors duration-300"
+                        className="w-12 h-12 transition-colors duration-300 text-muted-foreground"
                         fill="none"
-                        stroke="#86868b"
+                        stroke="currentColor"
                         strokeWidth="1.25"
                         viewBox="0 0 24 24"
                     >
@@ -52,7 +49,7 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
                     className="text-sm font-medium line-clamp-2 leading-snug"
                     style={{
                         fontFamily: "'Roboto', Arial, sans-serif",
-                        color: '#f5f5f7',
+                        color: 'var(--foreground)',
                         fontWeight: 500,
                     }}
                 >
@@ -63,7 +60,7 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
                         className="text-xs mt-1 line-clamp-2"
                         style={{
                             fontFamily: "'Roboto', Arial, sans-serif",
-                            color: '#aaaaaa',
+                            color: 'var(--muted-foreground)',
                             fontWeight: 400,
                         }}
                     >

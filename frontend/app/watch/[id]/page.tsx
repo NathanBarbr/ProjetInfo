@@ -344,18 +344,18 @@ export default function WatchPage() {
         <div
             className="min-h-screen"
             style={{
-                background: '#1c1c1e',
-                color: '#f5f5f7',
+                background: 'var(--background)',
+                color: 'var(--foreground)',
             }}
         >
             {/* Header - Glassmorphism with fine border */}
             <header
                 className="sticky top-0 z-50"
                 style={{
-                    background: 'rgba(44, 44, 46, 0.8)',
+                    background: 'color-mix(in srgb, var(--card) 80%, transparent)',
                     backdropFilter: 'blur(15px)',
                     WebkitBackdropFilter: 'blur(15px)',
-                    borderBottom: '1px solid #3a3a3c',
+                    borderBottom: '1px solid var(--border)',
                 }}
             >
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
@@ -363,9 +363,9 @@ export default function WatchPage() {
                         <Link
                             href={backUrl ? decodeURIComponent(backUrl) : "/"}
                             className="flex items-center gap-2 transition-colors flex-shrink-0"
-                            style={{ color: '#86868b' }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = '#f5f5f7'}
-                            onMouseLeave={(e) => e.currentTarget.style.color = '#86868b'}
+                            style={{ color: 'var(--muted-foreground)' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--foreground)'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--muted-foreground)'}
                         >
                             <svg
                                 className="w-5 h-5"
@@ -385,7 +385,7 @@ export default function WatchPage() {
                         </Link>
                         <div
                             className="h-4 w-px flex-shrink-0"
-                            style={{ background: '#3a3a3c' }}
+                            style={{ background: 'var(--border)' }}
                         />
 
                         {/* Breadcrumb: Match title > Clip */}
@@ -398,18 +398,18 @@ export default function WatchPage() {
                                     <button
                                         onClick={() => setCurrentClip(null)}
                                         className="truncate transition-colors"
-                                        style={{ color: '#86868b' }}
-                                        onMouseEnter={(e) => e.currentTarget.style.color = '#f5f5f7'}
-                                        onMouseLeave={(e) => e.currentTarget.style.color = '#86868b'}
+                                        style={{ color: 'var(--muted-foreground)' }}
+                                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--foreground)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--muted-foreground)'}
                                     >
                                         {meta?.title || "Match"}
                                     </button>
-                                    <span style={{ color: '#3a3a3c' }}>/</span>
+                                    <span style={{ color: 'var(--border)' }}>/</span>
                                     <span
                                         className="font-medium truncate"
                                         style={{
                                             fontFamily: "'Playfair Display', Georgia, serif",
-                                            color: '#f5f5f7',
+                                            color: 'var(--foreground)',
                                         }}
                                     >
                                         {getCurrentTitle()}
@@ -420,7 +420,7 @@ export default function WatchPage() {
                                     className="text-lg font-medium truncate"
                                     style={{
                                         fontFamily: "'Playfair Display', Georgia, serif",
-                                        color: '#f5f5f7',
+                                        color: 'var(--foreground)',
                                         letterSpacing: '-0.02em',
                                     }}
                                 >
@@ -471,14 +471,14 @@ export default function WatchPage() {
                                 className="w-20 h-20 mx-auto mb-4 flex items-center justify-center"
                                 style={{
                                     borderRadius: '16px',
-                                    background: 'rgba(44, 44, 46, 0.8)',
-                                    border: '1px solid #3a3a3c',
+                                    background: 'color-mix(in srgb, var(--card) 84%, transparent)',
+                                    border: '1px solid var(--border)',
                                 }}
                             >
                                 <svg
                                     className="w-10 h-10"
                                     fill="none"
-                                    stroke="#86868b"
+                                    stroke="var(--muted-foreground)"
                                     strokeWidth="1.25"
                                     viewBox="0 0 24 24"
                                 >
@@ -489,7 +489,7 @@ export default function WatchPage() {
                                 className="text-lg"
                                 style={{
                                     fontFamily: "'Playfair Display', Georgia, serif",
-                                    color: '#86868b',
+                                    color: 'var(--muted-foreground)',
                                 }}
                             >
                                 Video not found
@@ -524,14 +524,14 @@ export default function WatchPage() {
                                                 ? "fixed bottom-6 right-6 z-50 w-[420px] md:w-[480px] max-w-[92vw] shadow-2xl"
                                                 : ""
                                         }
-                                        style={isMiniPlayer && !miniPlayerDismissed ? { background: "#000", borderRadius: 12, border: "1px solid #3a3a3c", overflow: "hidden" } : undefined}
+                                        style={isMiniPlayer && !miniPlayerDismissed ? { background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" } : undefined}
                                     >
                                         {isMiniPlayer && !miniPlayerDismissed && (
                                             <button
                                                 type="button"
                                                 onClick={() => setMiniPlayerDismissed(true)}
                                                 className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center"
-                                                style={{ background: "rgba(28, 28, 30, 0.7)", border: "1px solid #3a3a3c", color: "#f5f5f7" }}
+                                                style={{ background: "color-mix(in srgb, var(--card) 88%, transparent)", border: "1px solid var(--border)", color: "var(--foreground)" }}
                                                 aria-label="Fermer le mini lecteur"
                                             >
                                                 ×
@@ -674,7 +674,7 @@ export default function WatchPage() {
                                 <Link
                                     href={`/compare?match_id=${encodeURIComponent(pointDetail.match_id)}`}
                                     className="text-xs px-4 py-2 rounded-lg inline-flex items-center gap-1.5 transition-colors"
-                                    style={{ background: "#2c2c2e", color: "#0a84ff", border: "1px solid #3a3a3c" }}
+                                    style={{ background: "var(--card)", color: "var(--primary)", border: "1px solid var(--border)" }}
                                 >
                                     Voir la comparaison complète des joueurs
                                 </Link>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { SlidersHorizontal } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { loadFavorites, upsertFavorite, removeFavorite } from "@/lib/favorites";
 
@@ -31,7 +32,7 @@ interface SearchResult {
     is_point_gagnant?: boolean;
     similarity_score?: number;
     highlight_score?: number;
-    [key: string]: any;
+    [key: string]: string | number | boolean | null | undefined;
 }
 
 interface SearchResponse {
@@ -42,7 +43,17 @@ interface SearchResponse {
     pages: number;
     mode?: string;
     message?: string;
+    llm_provider?: string;
+    parsed_filters?: Record<string, string | number>;
+    explicit_filters?: Record<string, string | number>;
     applied_filters?: Record<string, string | number>;
+    filter_changes?: Array<{
+        key: string;
+        label: string;
+        value?: string | number | null;
+        previous_value?: string | number | null;
+        change_type: string;
+    }>;
     applied_sort?: string;
     llm_explanation?: string | null;
     original_query?: string;
@@ -53,11 +64,18 @@ interface RecommendationResponse {
     recommendations: SearchResult[];
 }
 
+interface SuggestionResponse {
+    query: string;
+    suggestions: string[];
+}
+
 interface SearchStats {
     total_points: number;
     matches: { id: string; count: number }[];
+    players: string[];
     winners: string[];
     serveurs: string[];
+    sets: number[];
     fautes: string[];
     winning_shots: string[];
     service_zones: string[];
@@ -68,6 +86,98 @@ interface SearchStats {
 
 const API_URL = "http://localhost:8001";
 type SearchMode = "semantic" | "highlights" | "llm";
+const FILTER_KEYS = [
+    "match_id",
+    "player",
+    "set_num",
+    "winner",
+    "serveur",
+    "faute_type",
+    "winning_shot",
+    "winning_shot_status",
+    "service_lateralite",
+    "service_zone",
+    "nb_coups_min",
+    "nb_coups_max"
+] as const;
+type FilterKey = typeof FILTER_KEYS[number];
+type FiltersState = Record<FilterKey, string>;
+const HIGHLIGHT_WEIGHT_FIELDS = [
+    { key: "duration_weight", label: "Duree reelle", defaultValue: 35, description: "duree_secondes" },
+    { key: "rally_depth_weight", label: "Profondeur du rallye", defaultValue: 15, description: "nb_coups" },
+    { key: "effects_variety_weight", label: "Variete des effets", defaultValue: 15, description: "sequence_effets" },
+    { key: "laterality_variety_weight", label: "Variete des lateralites", defaultValue: 10, description: "sequence_lateralites" },
+    { key: "zone_variety_weight", label: "Variete des zones", defaultValue: 10, description: "sequence_zones" },
+    { key: "finish_weight", label: "Fin de point", defaultValue: 10, description: "pt_gagne + dernier coup" },
+    { key: "pressure_weight", label: "Pression du score", defaultValue: 5, description: "score serre / balle de set" }
+] as const;
+type HighlightWeightKey = typeof HIGHLIGHT_WEIGHT_FIELDS[number]["key"];
+type HighlightWeightsState = Record<HighlightWeightKey, string>;
+type SearchParamsLike = { get: (key: string) => string | null };
+const HIGHLIGHT_WEIGHT_KEYS = HIGHLIGHT_WEIGHT_FIELDS.map((field) => field.key);
+
+const getDefaultHighlightWeights = (): HighlightWeightsState => ({
+    duration_weight: "35",
+    rally_depth_weight: "15",
+    effects_variety_weight: "15",
+    laterality_variety_weight: "10",
+    zone_variety_weight: "10",
+    finish_weight: "10",
+    pressure_weight: "5"
+});
+
+const readHighlightWeightsFromParams = (params: SearchParamsLike): HighlightWeightsState => {
+    const defaults = getDefaultHighlightWeights();
+
+    HIGHLIGHT_WEIGHT_FIELDS.forEach((field) => {
+        const value = params.get(field.key);
+        if (value !== null && value.trim() !== "") {
+            defaults[field.key] = value;
+        }
+    });
+
+    return defaults;
+};
+
+const sanitizeHighlightWeights = (weights: HighlightWeightsState): HighlightWeightsState => {
+    const sanitized = getDefaultHighlightWeights();
+
+    HIGHLIGHT_WEIGHT_FIELDS.forEach((field) => {
+        const rawValue = weights[field.key].trim();
+        const parsedValue = Number.parseFloat(rawValue);
+        sanitized[field.key] = Number.isFinite(parsedValue) && parsedValue >= 0
+            ? String(parsedValue)
+            : String(field.defaultValue);
+    });
+
+    return sanitized;
+};
+
+const buildHighlightWeightUrlParams = (weights: HighlightWeightsState): Record<string, string> => {
+    const sanitized = sanitizeHighlightWeights(weights);
+    const urlParams: Record<string, string> = {};
+
+    HIGHLIGHT_WEIGHT_FIELDS.forEach((field) => {
+        urlParams[field.key] = sanitized[field.key] === String(field.defaultValue) ? "" : sanitized[field.key];
+    });
+
+    return urlParams;
+};
+
+const getHighlightWeightTotal = (weights: HighlightWeightsState): number => (
+    HIGHLIGHT_WEIGHT_FIELDS.reduce((sum, field) => {
+        const parsedValue = Number.parseFloat(weights[field.key]);
+        return sum + (Number.isFinite(parsedValue) ? parsedValue : 0);
+    }, 0)
+);
+
+const hasCustomHighlightWeights = (weights: HighlightWeightsState): boolean => (
+    HIGHLIGHT_WEIGHT_FIELDS.some((field) => {
+        const parsedValue = Number.parseFloat(weights[field.key]);
+        const currentValue = Number.isFinite(parsedValue) ? parsedValue : field.defaultValue;
+        return Math.abs(currentValue - field.defaultValue) > 1e-6;
+    })
+);
 
 function SearchContent() {
     const router = useRouter();
@@ -95,21 +205,38 @@ function SearchContent() {
     const [sortOrder, setSortOrder] = useState<string>(searchParams.get("sort") || "chronological");
     const [semanticAvailable, setSemanticAvailable] = useState(false);
     const [llmAvailable, setLlmAvailable] = useState(false);
+    const [showHighlightSettings, setShowHighlightSettings] = useState(false);
+    const [highlightWeights, setHighlightWeights] = useState<HighlightWeightsState>(
+        readHighlightWeightsFromParams(searchParams)
+    );
+    const [highlightWeightDraft, setHighlightWeightDraft] = useState<HighlightWeightsState>(
+        readHighlightWeightsFromParams(searchParams)
+    );
     const [recommendations, setRecommendations] = useState<SearchResult[]>([]);
     const [loadingRecommendations, setLoadingRecommendations] = useState(false);
     const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
     const [llmAppliedFilters, setLlmAppliedFilters] = useState<Record<string, string | number> | null>(null);
+    const [llmParsedFilters, setLlmParsedFilters] = useState<Record<string, string | number> | null>(null);
+    const [llmFilterChanges, setLlmFilterChanges] = useState<SearchResponse["filter_changes"]>([]);
     const [llmExplanation, setLlmExplanation] = useState<string | null>(null);
+    const [llmProvider, setLlmProvider] = useState<string | null>(null);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+    const suggestionBlurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
     // Filters state
-    const [filters, setFilters] = useState({
+    const [filters, setFilters] = useState<FiltersState>({
         match_id: searchParams.get("match_id") || "",
+        player: searchParams.get("player") || "",
         set_num: searchParams.get("set_num") || "",
         winner: searchParams.get("winner") || "",
         serveur: searchParams.get("serveur") || "",
         faute_type: searchParams.get("faute_type") || "",
         winning_shot: searchParams.get("winning_shot") || "",
+        winning_shot_status: searchParams.get("winning_shot_status") || "",
         service_lateralite: searchParams.get("service_lateralite") || "",
         service_zone: searchParams.get("service_zone") || "",
         nb_coups_min: searchParams.get("nb_coups_min") || "",
@@ -118,6 +245,8 @@ function SearchContent() {
 
     // Current page from URL
     const currentPage = Number(searchParams.get("page")) || 1;
+    const highlightWeightTotal = getHighlightWeightTotal(highlightWeightDraft);
+    const hasCustomHighlightProfile = hasCustomHighlightWeights(highlightWeights);
 
     // Check ES status and semantic search availability
     useEffect(() => {
@@ -170,6 +299,31 @@ function SearchContent() {
         }
     }, [semanticAvailable]);
 
+    const syncLlmFiltersToUrl = useCallback((applied: Record<string, string | number>) => {
+        const params = new URLSearchParams(searchParams.toString());
+        let changed = false;
+
+        FILTER_KEYS.forEach((key) => {
+            const nextValue = applied[key];
+            const normalizedValue = nextValue === undefined || nextValue === null ? "" : String(nextValue);
+            const currentValue = params.get(key) || "";
+
+            if (normalizedValue) {
+                if (currentValue !== normalizedValue) {
+                    params.set(key, normalizedValue);
+                    changed = true;
+                }
+            } else if (currentValue) {
+                params.delete(key);
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            router.replace(`${pathname}?${params.toString()}`);
+        }
+    }, [pathname, router, searchParams]);
+
     // Perform Search AND Stats based on URL params
     const performSearchAndStats = useCallback(async () => {
         if (esStatus === "disconnected") return;
@@ -178,7 +332,10 @@ function SearchContent() {
         setMessage(null);
         setRecommendations([]);
         setLlmAppliedFilters(null);
+        setLlmParsedFilters(null);
+        setLlmFilterChanges([]);
         setLlmExplanation(null);
+        setLlmProvider(null);
 
         // Build params from URL (source of truth)
         const params = new URLSearchParams(searchParams.toString());
@@ -201,11 +358,17 @@ function SearchContent() {
                 if (params.get("winner")) highlightParams.set("winner", params.get("winner")!);
                 if (params.get("serveur")) highlightParams.set("serveur", params.get("serveur")!);
                 if (params.get("set_num")) highlightParams.set("set_num", params.get("set_num")!);
+                HIGHLIGHT_WEIGHT_FIELDS.forEach((field) => {
+                    if (params.get(field.key)) {
+                        highlightParams.set(field.key, params.get(field.key)!);
+                    }
+                });
 
                 const highlightRes = await fetch(`${API_URL}/api/semantic/highlights?${highlightParams.toString()}`);
                 if (highlightRes.ok) {
                     const highlightData = await highlightRes.json();
                     searchData = {
+                        mode: highlightData.mode || "highlights",
                         points: highlightData.points || [],
                         total: highlightData.total || 0,
                         page: 1,
@@ -268,7 +431,13 @@ function SearchContent() {
             if (searchData.message) setMessage(searchData.message);
             if (searchData.mode === "llm") {
                 setLlmAppliedFilters(searchData.applied_filters || null);
+                setLlmParsedFilters(searchData.parsed_filters || null);
+                setLlmFilterChanges(searchData.filter_changes || []);
                 setLlmExplanation(searchData.llm_explanation || null);
+                setLlmProvider(searchData.llm_provider || null);
+                if (searchData.applied_filters) {
+                    syncLlmFiltersToUrl(searchData.applied_filters);
+                }
             }
 
             // Save queue (for continuous play)
@@ -284,7 +453,7 @@ function SearchContent() {
             const hasFilters = searchData.mode === "llm"
                 ? Boolean(searchData.applied_filters && Object.keys(searchData.applied_filters).length > 0)
                 : Array.from(params.entries()).some(([key, val]) =>
-                    !["page", "size", "mode"].includes(key) && val
+                    !["page", "size", "mode", ...HIGHLIGHT_WEIGHT_KEYS].includes(key) && val
                 );
 
             if (hasFilters && searchData.points?.length > 0) {
@@ -311,7 +480,7 @@ function SearchContent() {
             const statsSource =
                 searchData.mode === "llm" && searchData.applied_filters
                     ? Object.entries(searchData.applied_filters)
-                    : Array.from(params.entries()).filter(([key]) => !["page", "size", "mode", "sort", "q"].includes(key));
+                    : Array.from(params.entries()).filter(([key]) => !["page", "size", "mode", "sort", "q", ...HIGHLIGHT_WEIGHT_KEYS].includes(key));
 
             statsSource.forEach(([key, value]) => {
                 if (value !== undefined && value !== null && value !== "") {
@@ -327,12 +496,13 @@ function SearchContent() {
                 console.warn("Stats API failed", statsRes.status);
             }
 
-        } catch (error: any) {
-            setMessage(`Error: ${error.message || "Unknown error"}`);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            setMessage(`Error: ${errorMessage}`);
         } finally {
             setLoading(false);
         }
-    }, [searchParams, esStatus, searchMode, sortOrder, semanticAvailable, llmAvailable, fetchRecommendations]);
+    }, [searchParams, esStatus, searchMode, sortOrder, semanticAvailable, llmAvailable, fetchRecommendations, syncLlmFiltersToUrl]);
 
     // Effect to run search when URL params or sort mode change
     useEffect(() => {
@@ -350,6 +520,7 @@ function SearchContent() {
 
     // Keep sortOrder in sync with URL (back/forward navigation)
     useEffect(() => {
+        const nextHighlightWeights = readHighlightWeightsFromParams(searchParams);
         setSortOrder(searchParams.get("sort") || "chronological");
         setSearchMode(
             searchParams.get("mode") === "llm"
@@ -361,17 +532,86 @@ function SearchContent() {
         setQuery(searchParams.get("q") || "");
         setFilters({
             match_id: searchParams.get("match_id") || "",
+            player: searchParams.get("player") || "",
             set_num: searchParams.get("set_num") || "",
             winner: searchParams.get("winner") || "",
             serveur: searchParams.get("serveur") || "",
             faute_type: searchParams.get("faute_type") || "",
             winning_shot: searchParams.get("winning_shot") || "",
+            winning_shot_status: searchParams.get("winning_shot_status") || "",
             service_lateralite: searchParams.get("service_lateralite") || "",
             service_zone: searchParams.get("service_zone") || "",
             nb_coups_min: searchParams.get("nb_coups_min") || "",
             nb_coups_max: searchParams.get("nb_coups_max") || ""
         });
+        setHighlightWeights(nextHighlightWeights);
+        setHighlightWeightDraft(nextHighlightWeights);
     }, [searchParams]);
+
+    useEffect(() => {
+        if (suggestionBlurTimeoutRef.current) {
+            clearTimeout(suggestionBlurTimeoutRef.current);
+        }
+
+        const trimmedQuery = query.trim();
+        if (trimmedQuery.length < 2 || esStatus !== "connected") {
+            setSuggestions([]);
+            setShowSuggestions(false);
+            setLoadingSuggestions(false);
+            setActiveSuggestionIndex(-1);
+            return;
+        }
+
+        const timeoutId = setTimeout(async () => {
+            setLoadingSuggestions(true);
+            try {
+                const params = new URLSearchParams({
+                    q: trimmedQuery,
+                    limit: "8"
+                });
+                const res = await fetch(`${API_URL}/api/search/suggestions?${params.toString()}`);
+                if (!res.ok) {
+                    throw new Error("Suggestions API error");
+                }
+
+                const data: SuggestionResponse = await res.json();
+                const nextSuggestions = data.suggestions || [];
+                setSuggestions(nextSuggestions);
+                setShowSuggestions(nextSuggestions.length > 0);
+                setActiveSuggestionIndex(-1);
+            } catch (error) {
+                console.warn("Failed to fetch suggestions", error);
+                setSuggestions([]);
+                setShowSuggestions(false);
+            } finally {
+                setLoadingSuggestions(false);
+            }
+        }, 220);
+
+        return () => clearTimeout(timeoutId);
+    }, [query, esStatus]);
+
+    useEffect(() => {
+        if (searchMode !== "llm" || !llmAppliedFilters) {
+            return;
+        }
+
+        setFilters((currentFilters) => {
+            const nextFilters: FiltersState = { ...currentFilters };
+            let hasChanged = false;
+
+            FILTER_KEYS.forEach((key) => {
+                const nextValue = llmAppliedFilters[key];
+                const normalizedValue = nextValue === undefined || nextValue === null ? "" : String(nextValue);
+                if (nextFilters[key] !== normalizedValue) {
+                    nextFilters[key] = normalizedValue;
+                    hasChanged = true;
+                }
+            });
+
+            return hasChanged ? nextFilters : currentFilters;
+        });
+    }, [searchMode, llmAppliedFilters]);
 
     // Update URL helper
     const updateUrl = (newParams: Record<string, string>) => {
@@ -395,7 +635,22 @@ function SearchContent() {
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        updateUrl({ q: query, sort: sortOrder, mode: searchMode, ...filters });
+        setShowSuggestions(false);
+        setActiveSuggestionIndex(-1);
+        const nextParams = searchMode === "llm"
+            ? Object.fromEntries(FILTER_KEYS.map((key) => [key, ""]))
+            : filters;
+        updateUrl({ q: query, sort: sortOrder, mode: searchMode, ...nextParams });
+    };
+
+    const submitSuggestion = (suggestion: string) => {
+        setQuery(suggestion);
+        setShowSuggestions(false);
+        setActiveSuggestionIndex(-1);
+        const nextParams = searchMode === "llm"
+            ? Object.fromEntries(FILTER_KEYS.map((key) => [key, ""]))
+            : filters;
+        updateUrl({ q: suggestion, sort: sortOrder, mode: searchMode, ...nextParams });
     };
 
     const handleFilterChange = (key: string, value: string) => {
@@ -417,8 +672,33 @@ function SearchContent() {
         updateUrl({ sort: value });
     };
 
+    const handleHighlightWeightChange = (key: HighlightWeightKey, value: string) => {
+        setHighlightWeightDraft((currentWeights) => ({
+            ...currentWeights,
+            [key]: value
+        }));
+    };
+
+    const handleApplyHighlightWeights = () => {
+        const nextWeights = sanitizeHighlightWeights(highlightWeightDraft);
+        setHighlightWeights(nextWeights);
+        setHighlightWeightDraft(nextWeights);
+        setShowHighlightSettings(false);
+        updateUrl(buildHighlightWeightUrlParams(nextWeights));
+    };
+
+    const handleResetHighlightWeights = () => {
+        const defaultWeights = getDefaultHighlightWeights();
+        setHighlightWeights(defaultWeights);
+        setHighlightWeightDraft(defaultWeights);
+        updateUrl(buildHighlightWeightUrlParams(defaultWeights));
+    };
+
     const handleModeChange = (value: SearchMode) => {
         setSearchMode(value);
+        if (value !== "highlights") {
+            setShowHighlightSettings(false);
+        }
         updateUrl({ mode: value });
     };
 
@@ -467,6 +747,30 @@ function SearchContent() {
         return labels[key] || key;
     };
 
+    const formatFilterValue = (key: string, value: string | number | null | undefined) => {
+        if (value === null || value === undefined || value === "") return "aucune valeur";
+        if ((key === "service_lateralite" || key === "lateralite") && typeof value === "string") {
+            return value.replace("_", " ");
+        }
+        return String(value);
+    };
+
+    const getFilterChangeText = (change: NonNullable<SearchResponse["filter_changes"]>[number]) => {
+        const currentValue = formatFilterValue(change.key, change.value);
+        const previousValue = formatFilterValue(change.key, change.previous_value);
+
+        if (change.change_type === "added_by_llm") {
+            return `${change.label}: ${currentValue} ajoute par le LLM`;
+        }
+        if (change.change_type === "confirmed_by_user") {
+            return `${change.label}: ${currentValue} confirme`;
+        }
+        if (change.change_type === "overridden_by_user") {
+            return `${change.label}: ${previousValue} propose par le LLM, remplace par ${currentValue}`;
+        }
+        return `${change.label}: ${currentValue}`;
+    };
+
     const toggleFavorite = (result: SearchResult) => {
         const videoSlug = getSlug(result.match_id);
         const clipId = getClipId(result);
@@ -481,7 +785,7 @@ function SearchContent() {
         const updated = favoriteIds.has(id)
             ? removeFavorite(id)
             : upsertFavorite(item);
-        setFavoriteIds(new Set(updated.map((f: any) => f.id)));
+        setFavoriteIds(new Set(updated.map((f: { id: string }) => f.id)));
     };
 
     const buildDescription = (result: SearchResult) => {
@@ -524,13 +828,85 @@ function SearchContent() {
             <form onSubmit={handleSearchSubmit} className="mb-8 space-y-4">
                 {/* Search Bar */}
                 <div className="flex gap-2">
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Text search... (e.g., 'topspin', 'ace')"
-                        className="flex-1 px-4 py-3 bg-card border border-input rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary transition-colors"
-                    />
+                    <div className="relative flex-1">
+                        <input
+                            type="text"
+                            value={query}
+                            onChange={(e) => {
+                                setQuery(e.target.value);
+                                setShowSuggestions(true);
+                            }}
+                            onFocus={() => {
+                                if (suggestions.length > 0) setShowSuggestions(true);
+                            }}
+                            onBlur={() => {
+                                suggestionBlurTimeoutRef.current = setTimeout(() => {
+                                    setShowSuggestions(false);
+                                    setActiveSuggestionIndex(-1);
+                                }, 120);
+                            }}
+                            onKeyDown={(e) => {
+                                if (!showSuggestions || suggestions.length === 0) {
+                                    return;
+                                }
+
+                                if (e.key === "ArrowDown") {
+                                    e.preventDefault();
+                                    setActiveSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+                                    return;
+                                }
+
+                                if (e.key === "ArrowUp") {
+                                    e.preventDefault();
+                                    setActiveSuggestionIndex((prev) => (
+                                        prev <= 0 ? suggestions.length - 1 : prev - 1
+                                    ));
+                                    return;
+                                }
+
+                                if (e.key === "Enter" && activeSuggestionIndex >= 0) {
+                                    e.preventDefault();
+                                    submitSuggestion(suggestions[activeSuggestionIndex]);
+                                    return;
+                                }
+
+                                if (e.key === "Escape") {
+                                    setShowSuggestions(false);
+                                    setActiveSuggestionIndex(-1);
+                                }
+                            }}
+                            placeholder="Recherche sémantique... ex: topspin winner, long rally"
+                            className="w-full px-4 py-3 bg-card border border-input rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                        />
+                        {showSuggestions && (suggestions.length > 0 || loadingSuggestions) && (
+                            <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-xl border border-input bg-[#2c2c2e] shadow-2xl">
+                                {loadingSuggestions && (
+                                    <div className="px-4 py-3 text-sm text-[#aaaaaa]">
+                                        Suggestions...
+                                    </div>
+                                )}
+                                {suggestions.map((suggestion, index) => (
+                                    <button
+                                        key={`${suggestion}-${index}`}
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => submitSuggestion(suggestion)}
+                                        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors"
+                                        style={{
+                                            background: index === activeSuggestionIndex ? "#3a3a3c" : "transparent",
+                                            color: "#f5f5f7",
+                                            fontFamily: "'Roboto', Arial, sans-serif",
+                                        }}
+                                    >
+                                        <span>{suggestion}</span>
+                                        <span className="text-xs" style={{ color: "#86868b" }}>
+                                            suggestion
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <button
                         type="submit"
                         disabled={loading || esStatus !== "connected"}
@@ -560,6 +936,17 @@ function SearchContent() {
                             <option key={m.id} value={m.id}>
                                 {m.id.replace(/_/g, ' ')} ({m.count})
                             </option>
+                        ))}
+                    </select>
+
+                    <select
+                        value={filters.player}
+                        onChange={(e) => handleFilterChange("player", e.target.value)}
+                        className="px-3 py-2 bg-card border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
+                    >
+                        <option value="">Joueur: Tous</option>
+                        {stats?.players.map((player) => (
+                            <option key={player} value={player}>{player}</option>
                         ))}
                     </select>
 
@@ -636,6 +1023,16 @@ function SearchContent() {
                         ))}
                     </select>
 
+                    <select
+                        value={filters.winning_shot_status}
+                        onChange={(e) => handleFilterChange("winning_shot_status", e.target.value)}
+                        className="px-3 py-2 bg-card border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
+                    >
+                        <option value="">Type de point: Tous</option>
+                        <option value="winner">Point gagnant</option>
+                        <option value="error">Faute adverse</option>
+                    </select>
+
                     {/* Set */}
                     <select
                         value={filters.set_num}
@@ -643,7 +1040,7 @@ function SearchContent() {
                         className="px-3 py-2 bg-card border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
                     >
                         <option value="">Set: All</option>
-                        {[1, 2, 3, 4, 5, 6, 7].map(n => (
+                        {(stats?.sets?.length ? stats.sets : [1, 2, 3, 4, 5, 6, 7]).map(n => (
                             <option key={n} value={n}>Set {n}</option>
                         ))}
                     </select>
@@ -736,14 +1133,98 @@ function SearchContent() {
                             </span>
                         )}
                         {searchMode === "llm" && (
-                            <span className="text-xs text-emerald-400">
-                                Le LLM transforme ta requete en filtres deterministes
+                            <span className="text-xs text-muted-foreground">
+                                Les filtres de l&apos;interface sont renseignes automatiquement par le LLM.
                             </span>
                         )}
                         {searchMode === "highlights" && (
                             <span className="text-xs text-amber-500">
                                 Points gagnants avec longs échanges
                             </span>
+                        )}
+                    </div>
+                )}
+
+                {searchMode === "highlights" && (
+                    <div className="rounded-xl border border-amber-500/30 bg-[color-mix(in_srgb,var(--card)_92%,#f59e0b_8%)]">
+                        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                            <div>
+                                <div className="text-sm font-medium text-foreground">
+                                    Ponderations des highlights
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                    Valeurs par defaut: 35/15/15/10/10/10/5
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {hasCustomHighlightProfile && (
+                                    <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-700 dark:text-amber-200">
+                                        Profil personnalise
+                                    </span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowHighlightSettings((currentValue) => !currentValue)}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-card px-3 py-2 text-sm text-amber-700 transition-colors hover:border-amber-500/50 hover:text-amber-800 dark:text-amber-100 dark:hover:text-white"
+                                >
+                                    <SlidersHorizontal className="h-4 w-4" />
+                                    Parametres
+                                </button>
+                            </div>
+                        </div>
+
+                        {showHighlightSettings && (
+                            <div className="border-t border-amber-500/20 px-4 py-4">
+                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                    {HIGHLIGHT_WEIGHT_FIELDS.map((field) => (
+                                        <label
+                                            key={field.key}
+                                            className="rounded-lg border border-amber-500/20 bg-[color-mix(in_srgb,var(--card)_90%,#f59e0b_10%)] p-3"
+                                        >
+                                            <span className="mb-1 block text-sm font-medium text-foreground">
+                                                {field.label}
+                                            </span>
+                                            <span className="mb-2 block text-xs text-muted-foreground">
+                                                {field.description}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={highlightWeightDraft[field.key]}
+                                                    onChange={(e) => handleHighlightWeightChange(field.key, e.target.value)}
+                                                    className="w-full rounded-lg border border-amber-400/20 bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:border-amber-400"
+                                                />
+                                                <span className="text-sm text-muted-foreground">%</span>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div className="text-xs text-muted-foreground">
+                                        Total actuel: {highlightWeightTotal % 1 === 0 ? highlightWeightTotal.toFixed(0) : highlightWeightTotal.toFixed(1)}%.
+                                        {" "}Le backend renormalise automatiquement si le total n&apos;est pas a 100%.
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleResetHighlightWeights}
+                                            className="rounded-lg border border-amber-500/30 px-3 py-2 text-sm text-amber-700 transition-colors hover:border-amber-500/50 hover:text-amber-800 dark:text-amber-100 dark:hover:text-white"
+                                        >
+                                            Reinitialiser
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleApplyHighlightWeights}
+                                            className="rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                                        >
+                                            Appliquer
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
                 )}
@@ -768,7 +1249,65 @@ function SearchContent() {
                 </div>
             )}
 
-            {searchMode === "llm" && llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0 && (
+            {false && searchMode === "llm" && ((llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0) || llmFilterChanges.length > 0 || llmExplanation) && (
+                <div className="mb-6 p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
+                    <div className="mb-3 flex items-center justify-between gap-4">
+                        <span className="text-sm font-medium text-emerald-300">Filtres interprétés</span>
+                        {llmProvider && (
+                            <span className="text-xs text-emerald-100/70">
+                                Source: OpenAI
+                            </span>
+                        )}
+                    </div>
+                    {llmFilterChanges.length > 0 && (
+                        <div className="mb-3 flex flex-col gap-2">
+                            {llmFilterChanges.map((change) => (
+                                <div
+                                    key={`${change.key}-${change.change_type}-${String(change.value)}`}
+                                    className="rounded-lg border border-emerald-500/20 bg-black/10 px-3 py-2 text-xs text-emerald-100"
+                                >
+                                    {getFilterChangeText(change)}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {llmParsedFilters && Object.keys(llmParsedFilters).length > 0 && (
+                        <div className="mb-3">
+                            <div className="mb-2 text-xs text-emerald-100/70">Filtres proposés par le LLM</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {Object.entries(llmParsedFilters).map(([key, value]) => (
+                                    <span
+                                        key={key}
+                                        className="px-2 py-1 rounded-full text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                                    >
+                                        {formatFilterLabel(key)}: {formatFilterValue(key, value)}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0 && (
+                        <div className="mb-2">
+                            <div className="mb-2 text-xs text-emerald-100/70">Filtres finalement appliqués</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {Object.entries(llmAppliedFilters).map(([key, value]) => (
+                                    <span
+                                        key={key}
+                                        className="px-2 py-1 rounded-full text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                                    >
+                                        {formatFilterLabel(key)}: {formatFilterValue(key, value)}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {llmExplanation && (
+                        <p className="text-xs text-emerald-100/80">{llmExplanation}</p>
+                    )}
+                </div>
+            )}
+
+            {false && searchMode === "llm" && llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0 && (
                 <div className="mb-6 p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                         <span className="text-sm font-medium text-emerald-300">Filtres interprétés</span>
@@ -817,13 +1356,13 @@ function SearchContent() {
                     const isFav = favoriteIds.has(favId);
 
                     return (
-                        <div key={result.id} className="group block">
+                        <div key={result.id} className="group block rounded-2xl border border-border bg-card/70 p-3 shadow-sm transition-colors hover:bg-card">
                             <Link
                                 href={`/watch/${videoSlug}?clip=${clipId}&backUrl=${backUrl}`}
                                 className="block"
                             >
                                 {/* Thumbnail - clean */}
-                                <div className="aspect-video overflow-hidden rounded-xl">
+                                <div className="aspect-video overflow-hidden rounded-xl border border-border/60">
                                     <img
                                         src={`${API_URL}/api/videos/${videoSlug}/clips/${clipId}/thumbnail`}
                                         alt={`Point ${result.point_id}`}
@@ -833,13 +1372,13 @@ function SearchContent() {
                                 </div>
 
                                 {/* Info - YouTube style with Roboto */}
-                                <div className="pt-3 pb-4 px-0">
+                                <div className="pt-3 pb-2 px-0">
                                     <div className="flex items-center justify-between mb-1">
                                         <span
                                             className="text-xs font-medium"
                                             style={{
                                                 fontFamily: "'Roboto', Arial, sans-serif",
-                                                color: '#f5f5f7',
+                                                color: 'var(--foreground)',
                                             }}
                                         >
                                             {result.winner}
@@ -848,7 +1387,7 @@ function SearchContent() {
                                             className="text-xs"
                                             style={{
                                                 fontFamily: "'Roboto', Arial, sans-serif",
-                                                color: '#aaaaaa',
+                                                color: 'var(--muted-foreground)',
                                             }}
                                         >
                                             {result.nb_coups} shots
@@ -860,10 +1399,10 @@ function SearchContent() {
                                         className="text-sm mb-1"
                                         style={{
                                             fontFamily: "'Roboto', Arial, sans-serif",
-                                            color: '#f5f5f7',
+                                            color: 'var(--foreground)',
                                         }}
                                     >
-                                        <span style={{ color: '#aaaaaa' }}>Service:</span> <span style={{ fontWeight: 500 }}>{result.serveur}</span>
+                                        <span style={{ color: 'var(--muted-foreground)' }}>Service:</span> <span style={{ fontWeight: 500 }}>{result.serveur}</span>
                                     </div>
 
                                     {result.faute_type && (
@@ -871,7 +1410,7 @@ function SearchContent() {
                                             className="text-xs"
                                             style={{
                                                 fontFamily: "'Roboto', Arial, sans-serif",
-                                                color: '#aaaaaa',
+                                                color: 'var(--muted-foreground)',
                                             }}
                                         >
                                             {result.faute_type === 'pt_gagne' ? 'Winning point' : `Fault: ${result.faute_type}`}
@@ -884,7 +1423,7 @@ function SearchContent() {
                                             className="text-xs mt-1"
                                             style={{
                                                 fontFamily: "'Roboto', Arial, sans-serif",
-                                                color: '#aaaaaa',
+                                                color: 'var(--muted-foreground)',
                                             }}
                                         >
                                             Last shot: {result.dernier_coup}
@@ -897,8 +1436,8 @@ function SearchContent() {
                                             className="mt-2 text-xs pt-2 flex justify-between"
                                             style={{
                                                 fontFamily: "'Roboto', Arial, sans-serif",
-                                                borderTop: '1px solid #3a3a3c',
-                                                color: '#aaaaaa',
+                                                borderTop: '1px solid var(--border)',
+                                                color: 'var(--muted-foreground)',
                                             }}
                                         >
                                             <span>Score: {result.score_A} - {result.score_B}</span>
@@ -907,7 +1446,7 @@ function SearchContent() {
 
                                 </div>
                             </Link>
-                            <div className="mt-1 flex justify-end">
+                            <div className="mt-2 flex justify-end">
                                 <button
                                     onClick={() => toggleFavorite(result)}
                                     className={`px-3 py-1 text-sm rounded-full border transition-colors flex items-center justify-center ${isFav
@@ -915,7 +1454,7 @@ function SearchContent() {
                                         : "border-input bg-card text-foreground hover:bg-muted"
                                         }`}
                                 >
-                                    <span style={{ color: isFav ? '#fbbf24' : '#f5f5f7', fontSize: '14px' }}>
+                                    <span style={{ color: isFav ? '#fbbf24' : 'var(--foreground)', fontSize: '14px' }}>
                                         {isFav ? "♥" : "♡"}
                                     </span>
                                 </button>
@@ -1042,18 +1581,18 @@ export default function SearchPage() {
         <div
             className="min-h-screen"
             style={{
-                background: '#1c1c1e',
-                color: '#f5f5f7',
+                background: 'var(--background)',
+                color: 'var(--foreground)',
             }}
         >
             {/* Header - Glassmorphism */}
             <header
                 className="sticky top-0 z-50"
                 style={{
-                    background: 'rgba(44, 44, 46, 0.8)',
+                    background: 'color-mix(in srgb, var(--card) 80%, transparent)',
                     backdropFilter: 'blur(15px)',
                     WebkitBackdropFilter: 'blur(15px)',
-                    borderBottom: '1px solid #3a3a3c',
+                    borderBottom: '1px solid var(--border)',
                 }}
             >
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4 justify-between">
@@ -1061,9 +1600,9 @@ export default function SearchPage() {
                         <Link
                             href="/"
                             className="flex items-center gap-2 transition-colors"
-                            style={{ color: '#86868b' }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = '#f5f5f7'}
-                            onMouseLeave={(e) => e.currentTarget.style.color = '#86868b'}
+                            style={{ color: 'var(--muted-foreground)' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--foreground)'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--muted-foreground)'}
                         >
                             <svg
                                 className="w-5 h-5"
@@ -1081,13 +1620,13 @@ export default function SearchPage() {
                         </Link>
                         <div
                             className="h-4 w-px"
-                            style={{ background: '#3a3a3c' }}
+                            style={{ background: 'var(--border)' }}
                         />
                         <h1
                             className="text-lg font-medium"
                             style={{
                                 fontFamily: "'Playfair Display', Georgia, serif",
-                                color: '#f5f5f7',
+                                color: 'var(--foreground)',
                                 letterSpacing: '-0.02em',
                             }}
                         >
@@ -1102,7 +1641,7 @@ export default function SearchPage() {
             <Suspense fallback={
                 <div
                     className="p-8 text-center"
-                    style={{ color: '#86868b', fontFamily: "'Inter', sans-serif" }}
+                    style={{ color: 'var(--muted-foreground)', fontFamily: "'Inter', sans-serif" }}
                 >
                     Loading search...
                 </div>

@@ -434,23 +434,23 @@ export default function ComparePage() {
     const colorB = "#ff453a";
 
     return (
-        <div className="min-h-screen" style={{ background: "#1c1c1e", color: "#f5f5f7" }}>
+        <div className="min-h-screen" style={{ background: "var(--background)", color: "var(--foreground)" }}>
             {/* Header */}
             <header className="sticky top-0 z-50"
                 style={{
-                    background: "rgba(44, 44, 46, 0.8)",
+                    background: "color-mix(in srgb, var(--card) 80%, transparent)",
                     backdropFilter: "blur(15px)",
-                    borderBottom: "1px solid #3a3a3c",
+                    borderBottom: "1px solid var(--border)",
                 }}>
                 <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-14">
                     <Link href="/" className="text-lg font-bold"
-                        style={{ fontFamily: "'Playfair Display', serif", color: "#f5f5f7" }}>
+                        style={{ fontFamily: "'Playfair Display', serif", color: "var(--foreground)" }}>
                         Video Gallery
                     </Link>
                     <div className="flex items-center gap-4">
                         <ThemeToggle />
                         <Link href="/search" className="text-sm px-3 py-1.5 rounded-lg"
-                            style={{ background: "#2c2c2e", color: "#f5f5f7", border: "1px solid #3a3a3c" }}>
+                            style={{ background: "var(--card)", color: "var(--foreground)", border: "1px solid var(--border)" }}>
                             Search
                         </Link>
                     </div>

@@ -7,13 +7,20 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from elasticsearch import Elasticsearch
+from env_loader import get_backend_env, load_backend_env
+
+load_backend_env()
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # Configuration
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY = get_backend_env("OPENAI_API_KEY", "")
 ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 ES_INDEX = "pingpong_points"
+
+
+def get_openai_api_key() -> str:
+    return get_backend_env("OPENAI_API_KEY", "")
 
 
 class ChatMessage(BaseModel):
@@ -96,7 +103,8 @@ def generate_ai_response(message: str, history: List[ChatMessage], points: List[
     """
     Generate a response using OpenAI API with RAG context.
     """
-    if not OPENAI_API_KEY:
+    api_key = get_openai_api_key()
+    if not api_key:
         # Fallback response without AI
         if points:
             point_texts = [
@@ -110,7 +118,7 @@ def generate_ai_response(message: str, history: List[ChatMessage], points: List[
     try:
         import openai
         
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        client = openai.OpenAI(api_key=api_key)
         
         # Build context from found points
         context = ""
@@ -149,8 +157,8 @@ Réponds toujours en français et sois amical."""
         
         return response.choices[0].message.content
         
-    except Exception as e:
-        print(f"OpenAI error: {e}")
+    except Exception:
+        print("OpenAI error: request failed")
         # Fallback
         if points:
             return f"J'ai trouvé {len(points)} point(s) ! Clique dessus pour les voir."
@@ -184,7 +192,7 @@ async def chat_status():
     """
     Check chat service status.
     """
-    has_openai = bool(OPENAI_API_KEY)
+    has_openai = bool(get_openai_api_key())
     
     # Check ES
     try:
