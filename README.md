@@ -32,8 +32,10 @@ Cette plateforme permet d'analyser et de naviguer dans des matchs de ping-pong a
 
 ### 🚀 Fonctionnalités Avancées
 - **Streaming vidéo** optimisé avec HTTP Range Requests
-- **Mode Highlights** : Détection automatique des meilleurs points
+- **Mode Highlights v2** : Scoring pondéré (sémantique + contexte match)
 - **Recommandations** : Suggestions de points similaires (k-NN)
+- **Recherche content-based** : Filtres par zone/mouvement/intensité
+- **Visual analytics** : Zone occupancy par joueur/set
 - **Gestion de clips** par set et point avec thumbnails
 - **Tests automatisés** : 40+ tests (unitaires, intégration, E2E)
 - **Architecture containerisée** avec Docker
@@ -45,11 +47,13 @@ Cette plateforme permet d'analyser et de naviguer dans des matchs de ping-pong a
 ```
 ProjetInfo/
 ├── backend/                          # API FastAPI
-│   ├── main.py                       # Point d'entrée principal (4 routers)
+│   ├── main.py                       # Point d'entrée principal (routers API)
 │   ├── routers/                      # Architecture modulaire
 │   │   ├── videos.py                 # Streaming vidéo et clips
 │   │   ├── search.py                 # Recherche Elasticsearch full-text
 │   │   ├── semantic.py               # Recherche vectorielle + highlights
+│   │   ├── visualization.py          # Visual analytics embeddings + zones
+│   │   ├── nl_search.py              # Parsing NL -> filtres structurés
 │   │   └── chat.py                   # Chatbot RAG avec OpenAI
 │   ├── embeddings/                   # Génération embeddings sémantiques
 │   │   ├── embedder.py               # Sentence-Transformers (384D)
@@ -133,11 +137,14 @@ ProjetInfo/
 
 ### Recherche Sémantique (Nouveau !)
 - **Embeddings vectoriels** : Modèle `paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions)
-- **Mode Highlights** : Détection automatique des meilleurs points
-  - Critères : points gagnants (`pt_gagne`) + échanges longs (≥5 coups)
-  - Tri par similarité vectorielle (cosine similarity)
+- **Mode Highlights v2** : rerank par `highlight_score`
+  - composantes : similarité sémantique, point gagnant, longueur de rallye, fin de set, momentum
 - **Recommandations k-NN** : "Vous aimerez aussi" basé sur similarité
 - **Recherche hybride** : Combine full-text + vectorielle (pondération ajustable)
+- **Filtres content-based** :
+  - `occupancy_zone` (`left|middle|right`)
+  - `movement_intensity_min/max`
+  - `rally_intensity_min/max`
 - **Descriptions enrichies** : Transformation des données structurées en texte naturel
 
 **Exemple de description générée** :
@@ -221,7 +228,7 @@ pip install -r requirements.txt
 # OPENAI_API_KEY=sk-...
 
 # Lancer le serveur
-uvicorn main:app --reload
+uvicorn main:app --reload --host 127.0.0.1 --port 8001
 ```
 
 Backend disponible sur **http://localhost:8001**  
@@ -244,6 +251,15 @@ python embeddings/pipeline.py search "smash gagnant" -k 5
 
 
 **Note** : Cette étape génère les embeddings vectoriels (384D) pour tous les points du CSV et les indexe dans Elasticsearch. C'est nécessaire pour utiliser le mode Highlights et les recommandations.
+
+### 2.6. Réindexer après ajout de nouveaux champs
+
+Si vous ajoutez des champs calculés (ex: `occupancy_zone`, `movement_intensity`, `rally_intensity`), relancez une réindexation complète :
+
+```bash
+cd backend
+python embeddings/pipeline.py index --csv data/points_index.csv --recreate
+```
 
 ### 3. Configurer le Frontend
 
@@ -270,9 +286,12 @@ Frontend disponible sur **http://localhost:3000**
 app = FastAPI(title="Video Streaming API", version="0.3.0")
 
 # Inclusion des routers
-app.include_router(videos.router)   # /api/videos
-app.include_router(search.router)   # /api/search
-app.include_router(chat.router)     # /api/chat
+app.include_router(videos.router)        # /api/videos
+app.include_router(search.router)        # /api/search
+app.include_router(chat.router)          # /api/chat
+app.include_router(semantic.router)      # /api/semantic
+app.include_router(visualization.router) # /api/visualization
+app.include_router(nl_search.router)     # /api/nl-search
 ```
 
 ### Router Videos (`routers/videos.py`)
@@ -401,7 +420,7 @@ Server → Body: [1001 bytes de données]
 
 ### 2. CORS (Cross-Origin Resource Sharing)
 
-Le frontend (port 3000) et le backend (port 8000) sont sur des origines différentes.
+Le frontend (port 3000) et le backend (port 8001) sont sur des origines différentes.
 
 **Configuration Backend** :
 ```python
@@ -482,8 +501,13 @@ Combine la recherche de documents pertinents avec la génération de texte :
 **Paramètres de recherche** :
 - `q` : Query full-text
 - `video_id` : Filtrer par vidéo
-- `set_number` : Filtrer par set
+- `set_num` : Filtrer par set
 - `winner` : Filtrer par gagnant
+- `serveur` : Filtrer par serveur
+- `winning_shot_status` : `winner` ou `error`
+- `occupancy_zone` : `left|middle|right`
+- `movement_intensity_min/max` : intensité de déplacement
+- `rally_intensity_min/max` : intensité rallye (0..1)
 - `page` : Numéro de page (défaut: 1)
 - `size` : Résultats par page (défaut: 20, max: 100)
 
@@ -492,6 +516,7 @@ Combine la recherche de documents pertinents avec la génération de texte :
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
 | `GET` | `/api/semantic/status` | Statut de l'index embeddings |
+| `GET` | `/api/semantic/search` | Recherche sémantique texte→vecteur (hybride) |
 | `GET` | `/api/semantic/highlights` | Mode highlights (meilleurs points) |
 | `GET` | `/api/semantic/similar` | Recommandations par similarité |
 | `GET` | `/api/semantic/point/{id}/similar` | Points similaires à un point |
@@ -502,6 +527,13 @@ Combine la recherche de documents pertinents avec la génération de texte :
 - `winner` : Filtrer par gagnant
 - `serveur` : Filtrer par serveur
 - `set_num` : Filtrer par set
+
+**Paramètres semantic search (`/api/semantic/search`)** :
+- `q` : texte de requête
+- `k` : nombre de résultats
+- filtres match: `match_id`, `winner`, `serveur`, `set_num`
+- filtres techniques: `faute_type`, `winning_shot`, `service_lateralite`, `service_zone`
+- filtres content-based: `occupancy_zone`, `movement_intensity_min`, `rally_intensity_min`
 
 **Exemple highlights** :
 ```bash
@@ -525,6 +557,19 @@ GET /api/semantic/highlights?k=10&match_id=FAN-ZHENDONG_vs_TRULS-MOREGARD
   ]
 }
 ```
+
+### Visualization Router (`/api/visualization`)
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/visualization/embeddings?method=pca` | Projection des points pour vue 2D/3D |
+| `GET` | `/api/visualization/zone-occupancy` | Agrégations zones par joueur |
+
+**Paramètres `zone-occupancy`** :
+- `match_id` : filtre match
+- `set_num` : filtre set
+- `winner` : filtre gagnant
+- `serveur` : filtre serveur
 
 ### Chat Router (`/api/chat`)
 
@@ -641,19 +686,27 @@ Frontend → Affiche highlights/recommandations
 
 ### Mode Highlights - Comment ça marche ?
 
-1. **Calcul du profil "beau point"** : Average des embeddings des points gagnants avec échanges longs
-2. **Recherche k-NN** : Trouve les K points les plus similaires au profil
-3. **Enrichissement** : Détecte automatiquement les points de fin de set
-4. **Tri** : Par score de similarité (cosine similarity)
+1. **Récupération candidats** : recherche vectorielle (k-NN) dans Elasticsearch
+2. **Enrichissement** : calcul de `is_set_point`, `is_point_gagnant`, `momentum_score`
+3. **Scoring pondéré** : `highlight_score` combine :
+   - similarité sémantique
+   - bonus point gagnant
+   - longueur du rallye
+   - bonus fin de set
+   - proxy de momentum (score serré + fin de set)
+4. **Rerank final** : tri par `highlight_score`
 
 **Code exemple** :
 ```python
-# Route /api/semantic/highlights
-results = indexer.search_by_highlight_similarity(k=20, filters={"match_id": match})
+# Route /api/semantic/highlights (simplifié)
+results = indexer.search_by_highlight_similarity(k=20, filters=filters)
 
 for point in results:
-    point["is_set_point"] = is_set_point(score_a, score_b, winner)
-    point["is_point_gagnant"] = (faute_type == "pt_gagne")
+    point = enrich_point_data(point)
+    point["momentum_score"] = momentum_proxy(point)
+    point["highlight_score"] = compute_highlight_score(point, point["similarity_score"])
+
+points.sort(key=lambda p: p["highlight_score"], reverse=True)
 ```
 
 ### Recommandations Similaires

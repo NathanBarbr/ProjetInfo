@@ -28,6 +28,7 @@ export default function VideoPlayer({ src, title, description }: VideoPlayerProp
     const [isMuted, setIsMuted] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showControls, setShowControls] = useState(true);
+    const [isHovered, setIsHovered] = useState(false);
     const [playbackRate, setPlaybackRate] = useState(1);
 
     // Format time in MM:SS

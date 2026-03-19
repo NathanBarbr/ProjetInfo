@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
-import { FavoriteItem, loadFavorites, removeFavorite } from "@/lib/favorites";
+import { FavoriteItem, loadFavorites, removeFavorite } from "@/utils/favorites";
 
 const API_URL = "http://localhost:8001";
 

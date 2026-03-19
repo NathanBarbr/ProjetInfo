@@ -13,6 +13,7 @@ import csv
 import json
 import argparse
 from pathlib import Path
+from typing import List
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
@@ -54,6 +55,9 @@ INDEX_MAPPING = {
             "faute_lateralite": {"type": "keyword"},
             "dernier_coup": {"type": "keyword"},
             "derniere_zone": {"type": "keyword"},
+            "occupancy_zone": {"type": "keyword"},
+            "movement_intensity": {"type": "integer"},
+            "rally_intensity": {"type": "float"},
             
             # Vidéo
             "clip_path": {"type": "keyword"},
@@ -70,6 +74,47 @@ INDEX_MAPPING = {
         "number_of_replicas": 0
     }
 }
+
+
+def _parse_zones(sequence_zones: str) -> List[str]:
+    if not sequence_zones:
+        return []
+    return [z.strip().lower() for z in str(sequence_zones).split(",") if z.strip()]
+
+
+def _dominant_occupancy_zone(sequence_zones: str) -> str:
+    zones = _parse_zones(sequence_zones)
+    if not zones:
+        return "unknown"
+    counts = {"left": 0, "middle": 0, "right": 0}
+    for zone in zones:
+        if zone.startswith("g"):
+            counts["left"] += 1
+        elif zone.startswith("m"):
+            counts["middle"] += 1
+        elif zone.startswith("d"):
+            counts["right"] += 1
+    best = max(counts, key=counts.get)
+    return best if counts[best] > 0 else "unknown"
+
+
+def _movement_intensity(sequence_zones: str) -> int:
+    zones = _parse_zones(sequence_zones)
+    if len(zones) < 2:
+        return 0
+    transitions = 0
+    for i in range(1, len(zones)):
+        if zones[i] != zones[i - 1]:
+            transitions += 1
+    return transitions
+
+
+def _rally_intensity(nb_coups: int, duree_frames: int, movement: int) -> float:
+    rally_component = min(1.0, (nb_coups or 0) / 12.0)
+    duration_component = min(1.0, (duree_frames or 0) / 250.0)
+    movement_component = min(1.0, movement / 10.0)
+    score = 0.45 * rally_component + 0.30 * duration_component + 0.25 * movement_component
+    return round(score, 3)
 
 
 def es_request(method: str, path: str, body: dict = None) -> dict:
@@ -177,6 +222,10 @@ def load_csv(csv_path: Path) -> list[dict]:
                 'competition': row['competition'],
                 'date': row['date'] if row['date'] else None
             }
+            movement = _movement_intensity(point["sequence_zones"])
+            point["occupancy_zone"] = _dominant_occupancy_zone(point["sequence_zones"])
+            point["movement_intensity"] = movement
+            point["rally_intensity"] = _rally_intensity(point["nb_coups"], point["duree_frames"], movement)
             points.append(point)
     
     return points

@@ -6,7 +6,7 @@ Modular architecture with routers for better code organization.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import videos, search, chat, semantic, visualization
+from routers import videos, search, chat, semantic, visualization, nl_search
 
 app = FastAPI(title="Video Streaming API", version="0.3.0")
 
@@ -26,8 +26,6 @@ app.include_router(search.router)
 app.include_router(chat.router)
 app.include_router(semantic.router)
 app.include_router(visualization.router)
-
-
 app.include_router(nl_search.router)
 
 @app.get("/")

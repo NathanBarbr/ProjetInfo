@@ -133,6 +133,9 @@ class ElasticSearchIndexer:
                     "faute_lateralite": {"type": "keyword"},
                     "dernier_coup": {"type": "keyword"},
                     "derniere_zone": {"type": "keyword"},
+                    "occupancy_zone": {"type": "keyword"},
+                    "movement_intensity": {"type": "integer"},
+                    "rally_intensity": {"type": "float"},
                     
                     # Clip vidéo
                     "clip_path": {"type": "keyword"},

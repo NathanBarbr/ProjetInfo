@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
-import { loadFavorites, upsertFavorite, removeFavorite } from "@/lib/favorites";
+import { loadFavorites, upsertFavorite, removeFavorite } from "@/utils/favorites";
 
 
 interface SearchResult {
@@ -28,7 +28,6 @@ interface SearchResult {
     is_set_point?: boolean;
     is_point_gagnant?: boolean;
     similarity_score?: number;
-    duree_frames?: number;
     [key: string]: any;
 }
 

@@ -77,6 +77,11 @@ def build_es_query(
     zone: Optional[str] = None,
     service_zone: Optional[str] = None,
     service_lateralite: Optional[str] = None,
+    occupancy_zone: Optional[str] = None,
+    movement_intensity_min: Optional[int] = None,
+    movement_intensity_max: Optional[int] = None,
+    rally_intensity_min: Optional[float] = None,
+    rally_intensity_max: Optional[float] = None,
     q: Optional[str] = None
 ) -> dict:
     """Helper to build the Elasticsearch query dict from filters."""
@@ -128,6 +133,9 @@ def build_es_query(
 
     if service_lateralite:
         filter_clauses.append({"term": {"service_lateralite": service_lateralite}})
+
+    if occupancy_zone:
+        filter_clauses.append({"term": {"occupancy_zone": occupancy_zone}})
     
     # Filtres range
     if nb_coups_min is not None or nb_coups_max is not None:
@@ -145,6 +153,22 @@ def build_es_query(
             range_clause["range"]["duree_frames"]["gte"] = duree_min
         if duree_max is not None:
             range_clause["range"]["duree_frames"]["lte"] = duree_max
+        filter_clauses.append(range_clause)
+
+    if movement_intensity_min is not None or movement_intensity_max is not None:
+        range_clause = {"range": {"movement_intensity": {}}}
+        if movement_intensity_min is not None:
+            range_clause["range"]["movement_intensity"]["gte"] = movement_intensity_min
+        if movement_intensity_max is not None:
+            range_clause["range"]["movement_intensity"]["lte"] = movement_intensity_max
+        filter_clauses.append(range_clause)
+
+    if rally_intensity_min is not None or rally_intensity_max is not None:
+        range_clause = {"range": {"rally_intensity": {}}}
+        if rally_intensity_min is not None:
+            range_clause["range"]["rally_intensity"]["gte"] = rally_intensity_min
+        if rally_intensity_max is not None:
+            range_clause["range"]["rally_intensity"]["lte"] = rally_intensity_max
         filter_clauses.append(range_clause)
     
     # Recherche dans les séquences (match partiel)
@@ -223,8 +247,13 @@ async def search_points(
     winning_shot_status: Optional[str] = Query(None, description="Statut du dernier coup: 'winner' (point gagné), 'error' (faute), ou None"),
     zone: Optional[str] = Query(None, description="Zone de jeu (m1, g2, d3, etc.)"),
     service_zone: Optional[str] = Query(None, description="Zone de service"),
-    service_lateralite: Optional[str] = Query(None, description="Latéralité du service (coup_droit, revers)"),
-    q: Optional[str] = Query(None, description="Recherche textuelle dans les séquences"),
+    service_lateralite: Optional[str] = Query(None, description="Lateralite du service (coup_droit, revers)"),
+    occupancy_zone: Optional[str] = Query(None, description="Zone d'occupation dominante (left, middle, right)"),
+    movement_intensity_min: Optional[int] = Query(None, ge=0, description="Intensite de mouvement minimum"),
+    movement_intensity_max: Optional[int] = Query(None, ge=0, description="Intensite de mouvement maximum"),
+    rally_intensity_min: Optional[float] = Query(None, ge=0, le=1, description="Intensite de rallye minimum"),
+    rally_intensity_max: Optional[float] = Query(None, ge=0, le=1, description="Intensite de rallye maximum"),
+    q: Optional[str] = Query(None, description="Recherche textuelle dans les sequences"),
     sort: Optional[str] = Query("chronological", description="Ordre de tri: chronological, longest, shortest, most_shots, least_shots, winners, errors"),
     page: int = Query(1, ge=1, description="Numéro de page"),
     size: int = Query(20, ge=1, le=100, description="Nombre de résultats par page")
@@ -252,7 +281,9 @@ async def search_points(
         match_id, player, winner, serveur, set_num, nb_coups_min, nb_coups_max,
         duree_min, duree_max,
         effet, lateralite, faute_type, winning_shot, winning_shot_status,
-        zone, service_zone, service_lateralite, q
+        zone, service_zone, service_lateralite,
+        occupancy_zone, movement_intensity_min, movement_intensity_max, rally_intensity_min, rally_intensity_max,
+        q
     )
     
     from_offset = (page - 1) * size
@@ -340,6 +371,11 @@ async def get_search_stats(
     zone: Optional[str] = Query(None),
     service_zone: Optional[str] = Query(None),
     service_lateralite: Optional[str] = Query(None),
+    occupancy_zone: Optional[str] = Query(None),
+    movement_intensity_min: Optional[int] = Query(None, ge=0),
+    movement_intensity_max: Optional[int] = Query(None, ge=0),
+    rally_intensity_min: Optional[float] = Query(None, ge=0, le=1),
+    rally_intensity_max: Optional[float] = Query(None, ge=0, le=1),
     q: Optional[str] = Query(None)
 ):
     """
@@ -357,7 +393,9 @@ async def get_search_stats(
         match_id, player, winner, serveur, set_num, nb_coups_min, nb_coups_max,
         duree_min, duree_max,
         effet, lateralite, faute_type, winning_shot, winning_shot_status,
-        zone, service_zone, service_lateralite, q
+        zone, service_zone, service_lateralite,
+        occupancy_zone, movement_intensity_min, movement_intensity_max, rally_intensity_min, rally_intensity_max,
+        q
     )
     
     aggs_body = {
@@ -753,4 +791,6 @@ async def get_player_compare(match_id: str):
         "player_A": extract_stats(resp_a, player_a, total),
         "player_B": extract_stats(resp_b, player_b, total),
     }
+
+
 

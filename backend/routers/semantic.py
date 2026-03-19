@@ -34,6 +34,14 @@ router = APIRouter(prefix="/api/semantic", tags=["semantic-search"])
 _indexer: Optional[ElasticSearchIndexer] = None
 _embedder: Optional[PointEmbedder] = None
 
+HIGHLIGHT_WEIGHTS = {
+    "semantic_similarity": 0.30,
+    "winner_bonus": 0.30,
+    "rally_length": 0.20,
+    "set_point": 0.10,
+    "momentum": 0.10,
+}
+
 def get_indexer() -> ElasticSearchIndexer:
     """Get or create the ElasticSearchIndexer singleton."""
     global _indexer
@@ -128,6 +136,39 @@ def enrich_point_data(point: dict) -> dict:
     return point
 
 
+def momentum_proxy(point: dict) -> float:
+    """
+    Approximate momentum pressure from score context.
+    Higher when score is tight and late in set.
+    """
+    score_a = int(point.get("score_A", 0) or 0)
+    score_b = int(point.get("score_B", 0) or 0)
+    tightness = 1.0 if abs(score_a - score_b) <= 1 else (0.6 if abs(score_a - score_b) <= 2 else 0.2)
+    late_set = 1.0 if max(score_a, score_b) >= 9 else (0.6 if max(score_a, score_b) >= 7 else 0.2)
+    return round(0.55 * tightness + 0.45 * late_set, 3)
+
+
+def compute_highlight_score(point: dict, semantic_score: float) -> float:
+    """
+    Weighted highlight score:
+    semantic + winning point + rally length + set-point + momentum pressure.
+    """
+    semantic_component = semantic_score / (1.0 + abs(semantic_score))
+    winner_component = 1.0 if point.get("faute_type") == "pt_gagne" else 0.0
+    rally_component = min(1.0, float(point.get("nb_coups", 0) or 0) / 12.0)
+    set_point_component = 1.0 if point.get("is_set_point") else 0.0
+    momentum_component = momentum_proxy(point)
+
+    score = (
+        HIGHLIGHT_WEIGHTS["semantic_similarity"] * semantic_component
+        + HIGHLIGHT_WEIGHTS["winner_bonus"] * winner_component
+        + HIGHLIGHT_WEIGHTS["rally_length"] * rally_component
+        + HIGHLIGHT_WEIGHTS["set_point"] * set_point_component
+        + HIGHLIGHT_WEIGHTS["momentum"] * momentum_component
+    )
+    return round(score, 4)
+
+
 @router.get("/highlights")
 async def search_highlights(
     k: int = Query(20, ge=1, le=100, description="Number of results"),
@@ -165,7 +206,7 @@ async def search_highlights(
             filters=filters if filters else None
         )
         
-        # Format and enrich results
+        # Format, enrich, then rerank with highlight v2 scoring.
         points = []
         for r in results:
             point = {
@@ -175,7 +216,11 @@ async def search_highlights(
             }
             # Enrich with additional computed fields
             point = enrich_point_data(point)
+            point["momentum_score"] = momentum_proxy(point)
+            point["highlight_score"] = compute_highlight_score(point, float(point.get("similarity_score", 0) or 0))
             points.append(point)
+
+        points.sort(key=lambda p: p.get("highlight_score", 0), reverse=True)
         
         return {
             "total": len(points),
@@ -310,7 +355,10 @@ async def text_semantic_search(
     faute_type: Optional[str] = Query(None),
     winning_shot: Optional[str] = Query(None),
     service_lateralite: Optional[str] = Query(None),
-    service_zone: Optional[str] = Query(None)
+    service_zone: Optional[str] = Query(None),
+    occupancy_zone: Optional[str] = Query(None, description="Dominant zone occupancy: left|middle|right"),
+    movement_intensity_min: Optional[int] = Query(None, ge=0, description="Minimum movement intensity"),
+    rally_intensity_min: Optional[float] = Query(None, ge=0, le=1, description="Minimum rally intensity (0-1)")
 ):
     """
     Perform a vector search based on a text query.
@@ -329,6 +377,7 @@ async def text_semantic_search(
         if winning_shot: filters["dernier_coup"] = winning_shot
         if service_lateralite: filters["service_lateralite"] = service_lateralite
         if service_zone: filters["service_zone"] = service_zone
+        if occupancy_zone: filters["occupancy_zone"] = occupancy_zone
         
         query_embedding = embedder.embed_query(q)
         
@@ -339,7 +388,7 @@ async def text_semantic_search(
             filters=filters if filters else None,
             vector_weight=0.7 # Combine text and vector similarity
         )
-        
+
         # Format and enrich results
         points = []
         for r in results:
@@ -350,6 +399,11 @@ async def text_semantic_search(
             }
             # Enrich with additional computed fields
             point = enrich_point_data(point)
+            point["momentum_score"] = momentum_proxy(point)
+            if movement_intensity_min is not None and int(point.get("movement_intensity", 0) or 0) < movement_intensity_min:
+                continue
+            if rally_intensity_min is not None and float(point.get("rally_intensity", 0) or 0) < rally_intensity_min:
+                continue
             points.append(point)
         
         return {

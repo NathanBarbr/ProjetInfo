@@ -11,7 +11,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 export default function VisualizationPage() {
     const [data, setData] = useState<any[]>([]);
+    const [zoneAnalytics, setZoneAnalytics] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingZones, setLoadingZones] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedPoint, setSelectedPoint] = useState<any>(null);
 
@@ -49,9 +51,33 @@ export default function VisualizationPage() {
         }
     };
 
+    const fetchZoneAnalytics = async (setValue = "", winnerValue = "", serverValue = "") => {
+        setLoadingZones(true);
+        try {
+            const params = new URLSearchParams();
+            if (setValue) params.set("set_num", setValue);
+            if (winnerValue) params.set("winner", winnerValue);
+            if (serverValue) params.set("serveur", serverValue);
+            const query = params.toString();
+            const res = await fetch(`${API_URL}/api/visualization/zone-occupancy${query ? `?${query}` : ""}`);
+            if (!res.ok) throw new Error("zone occupancy unavailable");
+            const json = await res.json();
+            setZoneAnalytics(json.players || []);
+        } catch {
+            setZoneAnalytics([]);
+        } finally {
+            setLoadingZones(false);
+        }
+    };
+
     useEffect(() => {
         fetchData();
+        fetchZoneAnalytics();
     }, []);
+
+    useEffect(() => {
+        fetchZoneAnalytics(setFilter, winnerFilter, serverFilter);
+    }, [setFilter, winnerFilter, serverFilter]);
 
     // Helper pour formater l'affichage (ex: "FAN-ZHENDONG" -> "FAN ZHENDONG")
     const formatLabel = (str: string) => {
@@ -119,6 +145,19 @@ export default function VisualizationPage() {
     };
 
     const hasFilters = winnerFilter || faultFilter || minShotsFilter || setFilter || serverFilter || winningShotFilter;
+    const activeFilters = useMemo(() => {
+        const labels: string[] = [];
+        if (winnerFilter) labels.push(`Vainqueur: ${formatLabel(winnerFilter)}`);
+        if (serverFilter) labels.push(`Serveur: ${formatLabel(serverFilter)}`);
+        if (setFilter) labels.push(`Set: ${setFilter}`);
+        if (faultFilter) labels.push(`Type: ${faultFilter}`);
+        if (winningShotFilter) labels.push(`Coup: ${winningShotFilter}`);
+        if (minShotsFilter) labels.push(`Min coups: ${minShotsFilter}`);
+        return labels;
+    }, [winnerFilter, serverFilter, setFilter, faultFilter, winningShotFilter, minShotsFilter]);
+
+    const uniquePlayers = useMemo(() => new Set(data.map((p) => p.winner).filter(Boolean)).size, [data]);
+    const uniqueSets = useMemo(() => new Set(data.map((p) => p.set_num).filter((v) => v !== undefined && v !== null)).size, [data]);
 
     return (
         <div className="min-h-screen bg-[#111111] text-[#f5f5f7] font-sans">
@@ -284,13 +323,78 @@ export default function VisualizationPage() {
                                 <X className="w-3 h-3" /> Effacer les filtres
                             </button>
                         )}
+
+                        {activeFilters.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-[#2f2f31]">
+                                <p className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Filtres actifs</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {activeFilters.map((filterLabel) => (
+                                        <span key={filterLabel} className="px-2 py-1 rounded-md bg-[#2c2c2e] text-[10px] text-gray-300 border border-[#3a3a3c]">
+                                            {filterLabel}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-[#1c1c1e] rounded-xl border border-[#3a3a3c] p-4">
+                        <h3 className="text-sm font-semibold text-gray-200 mb-3">Resume rapide</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="rounded-lg bg-[#2c2c2e]/70 border border-[#3a3a3c] p-2">
+                                <p className="text-[10px] text-gray-500 uppercase">Points visibles</p>
+                                <p className="text-sm font-semibold text-white">{loading ? "..." : activeCount}</p>
+                            </div>
+                            <div className="rounded-lg bg-[#2c2c2e]/70 border border-[#3a3a3c] p-2">
+                                <p className="text-[10px] text-gray-500 uppercase">Joueurs</p>
+                                <p className="text-sm font-semibold text-white">{uniquePlayers}</p>
+                            </div>
+                            <div className="rounded-lg bg-[#2c2c2e]/70 border border-[#3a3a3c] p-2 col-span-2">
+                                <p className="text-[10px] text-gray-500 uppercase">Sets indexes</p>
+                                <p className="text-sm font-semibold text-white">{uniqueSets}</p>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="bg-[#1c1c1e]/50 p-4 rounded-xl border border-[#3a3a3c] text-xs text-gray-500">
                         <p>💡 <b>Note:</b> {is3DMode ? "Utilisez la souris pour tourner (clic gauche), déplacer (clic droit) et zoomer (molette)." : "Les points s'estompent lorsqu'ils sont filtrés pour conserver la structure du graphique."}</p>
                     </div>
+                    <div className="bg-[#1c1c1e] rounded-xl border border-[#3a3a3c] p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold text-gray-200">Zones d'occupation (joueur / set)</h3>
+                            {loadingZones && <span className="text-[10px] text-gray-500">Chargement...</span>}
+                        </div>
+                        {zoneAnalytics.length === 0 ? (
+                            <p className="text-xs text-gray-500">Aucune donnee zone disponible.</p>
+                        ) : (
+                            <div className="space-y-4">
+                                {zoneAnalytics.slice(0, 2).map((player) => (
+                                    <div key={player.player} className="space-y-2">
+                                        <div className="text-xs text-gray-300 font-medium">
+                                            {formatLabel(player.player)} ({player.total_points})
+                                        </div>
+                                        {(player.occupancy_zones || []).length === 0 ? (
+                                            <p className="text-[11px] text-gray-500">Zones non disponibles pour ce filtre.</p>
+                                        ) : (
+                                            (player.occupancy_zones || []).slice(0, 3).map((z: any) => (
+                                                <div key={`${player.player}-${z.zone}`} className="flex items-center gap-2 text-[11px]">
+                                                    <span className="w-16 text-gray-400">{z.zone}</span>
+                                                    <div className="flex-1 h-1.5 bg-[#2c2c2e] rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-[#0a84ff]"
+                                                            style={{ width: `${Math.min(100, (z.count / Math.max(1, player.total_points)) * 100)}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="w-8 text-right text-gray-300">{z.count}</span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
-
                 {/* Graphique Principal */}
                 <div className="lg:col-span-10 h-full relative group">
                     {error ? (
@@ -359,3 +463,4 @@ export default function VisualizationPage() {
         </div>
     );
 }
+

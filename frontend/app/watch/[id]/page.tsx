@@ -9,7 +9,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import ServerProfilePanel from "@/components/ServerProfilePanel";
 import PointTrajectory from "@/components/PointTrajectory";
 import MomentumChart from "@/components/MomentumChart";
-import { FavoriteItem, loadFavorites, upsertFavorite, removeFavorite } from "@/lib/favorites";
+import { FavoriteItem, loadFavorites, upsertFavorite, removeFavorite } from "@/utils/favorites";
 
 
 interface VideoMeta {

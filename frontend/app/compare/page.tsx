@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -260,7 +260,7 @@ function RadarChart({ statsA, statsB, playerA, playerB }: {
     );
 }
 
-export default function ComparePage() {
+function ComparePageContent() {
     const searchParams = useSearchParams();
     const matchId = searchParams.get("match_id") || "";
     const [data, setData] = useState<CompareData | null>(null);
@@ -556,5 +556,13 @@ export default function ComparePage() {
                 )}
             </main>
         </div>
+    );
+}
+
+export default function ComparePage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center" style={{ color: "#86868b" }}>Loading compare...</div>}>
+            <ComparePageContent />
+        </Suspense>
     );
 }

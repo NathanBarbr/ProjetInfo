@@ -62,7 +62,8 @@ async def get_embeddings_visualization(
                 "match_id", "point_id", "video_id", # Keys
                 "faute_type", "winner", "nb_coups", "score_A", "score_B", # Stats
                 "description", "clip_path", # Content
-                "serveur", "set_num", "winning_shot", "return_shot" # Filters
+                "serveur", "set_num", "winning_shot", "return_shot", # Filters
+                "service_zone", "derniere_zone", "occupancy_zone", "movement_intensity", "rally_intensity"
             ]
         )
         
@@ -124,3 +125,71 @@ async def get_embeddings_visualization(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generating visualization: {str(e)}")
+
+
+@router.get("/zone-occupancy")
+async def get_zone_occupancy(
+    match_id: Optional[str] = Query(None, description="Filter by match"),
+    set_num: Optional[int] = Query(None, description="Filter by set"),
+    winner: Optional[str] = Query(None, description="Filter by winner"),
+    serveur: Optional[str] = Query(None, description="Filter by server")
+):
+    """
+    Aggregate zone occupation signals per player and set.
+    Uses service_zone, derniere_zone and occupancy_zone.
+    """
+    try:
+        if indexer.client is None:
+            indexer.connect()
+
+        filter_clauses = []
+        if match_id:
+            filter_clauses.append({"term": {"match_id": match_id}})
+        if set_num is not None:
+            filter_clauses.append({"term": {"set_num": set_num}})
+        if winner:
+            filter_clauses.append({"term": {"winner": winner}})
+        if serveur:
+            filter_clauses.append({"term": {"serveur": serveur}})
+
+        query = {"bool": {"filter": filter_clauses}} if filter_clauses else {"match_all": {}}
+
+        body = {
+            "size": 0,
+            "query": query,
+            "aggs": {
+                "players": {
+                    "terms": {"field": "winner", "size": 20},
+                    "aggs": {
+                        "service_zones": {"terms": {"field": "service_zone", "size": 20}},
+                        "end_zones": {"terms": {"field": "derniere_zone", "size": 20}},
+                        "occupancy_zones": {"terms": {"field": "occupancy_zone", "size": 10}},
+                        "sets": {"terms": {"field": "set_num", "size": 10, "order": {"_key": "asc"}}}
+                    }
+                }
+            }
+        }
+
+        response = indexer.client.search(index=indexer.INDEX_NAME, body=body)
+        buckets = response.get("aggregations", {}).get("players", {}).get("buckets", [])
+
+        players = []
+        for b in buckets:
+            players.append({
+                "player": b.get("key"),
+                "total_points": b.get("doc_count", 0),
+                "service_zones": [{"zone": z["key"], "count": z["doc_count"]} for z in b.get("service_zones", {}).get("buckets", [])],
+                "end_zones": [{"zone": z["key"], "count": z["doc_count"]} for z in b.get("end_zones", {}).get("buckets", [])],
+                "occupancy_zones": [{"zone": z["key"], "count": z["doc_count"]} for z in b.get("occupancy_zones", {}).get("buckets", [])],
+                "sets": [{"set": int(s["key"]), "count": s["doc_count"]} for s in b.get("sets", {}).get("buckets", [])]
+            })
+
+        return {
+            "match_id": match_id,
+            "set_num": set_num,
+            "winner": winner,
+            "serveur": serveur,
+            "players": players
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating zone occupancy: {str(e)}")

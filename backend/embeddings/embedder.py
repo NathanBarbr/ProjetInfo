@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+from collections import Counter
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -243,6 +244,54 @@ class PointEmbedder:
 
 
 def load_csv_data(csv_path: str) -> pd.DataFrame:
+    def _parse_zones(sequence_zones: Any) -> List[str]:
+        if sequence_zones is None:
+            return []
+        raw = str(sequence_zones).strip()
+        if not raw:
+            return []
+        return [z.strip().lower() for z in raw.split(",") if z.strip()]
+
+    def _normalize_zone(zone: str) -> Optional[str]:
+        if not zone:
+            return None
+        if zone in {"left", "middle", "right"}:
+            return zone
+        first = zone[0]
+        if first == "g":
+            return "left"
+        if first == "m":
+            return "middle"
+        if first == "d":
+            return "right"
+        return None
+
+    def _dominant_occupancy_zone(sequence_zones: Any) -> str:
+        zones = [_normalize_zone(z) for z in _parse_zones(sequence_zones)]
+        zones = [z for z in zones if z]
+        if not zones:
+            return "unknown"
+        return Counter(zones).most_common(1)[0][0]
+
+    def _movement_intensity(sequence_zones: Any) -> int:
+        zones = [_normalize_zone(z) for z in _parse_zones(sequence_zones)]
+        zones = [z for z in zones if z]
+        if len(zones) < 2:
+            return 0
+        transitions = 0
+        prev = zones[0]
+        for z in zones[1:]:
+            if z != prev:
+                transitions += 1
+            prev = z
+        return transitions
+
+    def _rally_intensity(nb_coups: int, movement: int) -> float:
+        # 0..1 score mixing rally length and spatial movement.
+        rally_component = min(1.0, max(0, int(nb_coups)) / 15.0)
+        movement_component = min(1.0, max(0, int(movement)) / 8.0)
+        return round((0.7 * rally_component) + (0.3 * movement_component), 4)
+
     """
     Charge et prépare les données du CSV.
     
@@ -262,6 +311,19 @@ def load_csv_data(csv_path: str) -> pd.DataFrame:
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+
+    # Derived content-based features used by semantic/search/visualization.
+    if "sequence_zones" in df.columns:
+        df["occupancy_zone"] = df["sequence_zones"].apply(_dominant_occupancy_zone)
+        df["movement_intensity"] = df["sequence_zones"].apply(_movement_intensity).astype(int)
+    else:
+        df["occupancy_zone"] = "unknown"
+        df["movement_intensity"] = 0
+
+    df["rally_intensity"] = df.apply(
+        lambda row: _rally_intensity(row.get("nb_coups", 0), row.get("movement_intensity", 0)),
+        axis=1
+    )
     
     return df
 
@@ -290,3 +352,4 @@ if __name__ == "__main__":
     print("\n🧮 Génération des embeddings...")
     embeddings = embedder.embed_texts(descriptions[:5])  # Test avec 5 premiers
     print(f"   Shape des embeddings: {embeddings.shape}")
+
