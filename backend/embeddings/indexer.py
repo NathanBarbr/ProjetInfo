@@ -4,6 +4,7 @@ Supporte la recherche hybride (filtres + similarité vectorielle).
 """
 
 import json
+import os
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
@@ -23,7 +24,7 @@ class ElasticSearchIndexer:
     Gère l'indexation et la recherche vectorielle dans Elasticsearch.
     """
     
-    INDEX_NAME = "tennis_points"
+    INDEX_NAME = os.getenv("ELASTICSEARCH_INDEX", "pingpong_points")
     HIGHLIGHT_WEIGHT_DEFAULTS = {
         "duration": 35.0,
         "rally_depth": 15.0,
