@@ -4,14 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import VideoCard from "@/components/VideoCard";
 import ThemeToggle from "@/components/ThemeToggle";
+import { API_URL } from "@/lib/api";
 
 interface Video {
   id: string;
   title: string;
   description?: string;
 }
-
-const API_URL = "http://localhost:8001";
 
 export default function Home() {
   const [videos, setVideos] = useState<Video[]>([]);

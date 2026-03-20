@@ -5,8 +5,6 @@ import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 import { FavoriteItem, loadFavorites, removeFavorite } from "@/lib/favorites";
 
-const API_URL = "http://localhost:8001";
-
 export default function FavoritesPage() {
     const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
 

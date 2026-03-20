@@ -3,11 +3,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import EmbeddingChart from '@/components/EmbeddingChart';
 import EmbeddingChart3D from '@/components/EmbeddingChart3D';
-import { RefreshCw, ArrowLeft, Filter, X, Box, Square } from "lucide-react"; // Ajout d'icônes
+import { RefreshCw, ArrowLeft, Filter, X, Box, Square } from "lucide-react";
 import Link from 'next/link';
+import { API_URL } from '@/lib/api';
 
-// URL de l'API Backend
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 export default function VisualizationPage() {
     const [data, setData] = useState<any[]>([]);
@@ -18,7 +17,7 @@ export default function VisualizationPage() {
     // Mode 3D
     const [is3DMode, setIs3DMode] = useState(false);
 
-    // États des filtres
+    // Etats des filtres
     const [winnerFilter, setWinnerFilter] = useState<string>("");
     const [faultFilter, setFaultFilter] = useState<string>("");
     const [minShotsFilter, setMinShotsFilter] = useState<string>("");
@@ -30,7 +29,7 @@ export default function VisualizationPage() {
         setLoading(true);
         setError(null);
         try {
-            // On récupère TOUTES les données, PCA 3D est maintenant par défaut sur le backend
+            // On recupere toutes les donnees. PCA 3D est le mode par defaut.
             let url = `${API_URL}/api/visualization/embeddings?method=pca`;
             if (refresh) url += '&refresh=true';
 
@@ -43,7 +42,7 @@ export default function VisualizationPage() {
             const json = await res.json();
             setData(json.points || []);
         } catch (err: any) {
-            setError(err.message || "Impossible de charger les données");
+            setError(err.message || "Impossible de charger les donnees");
         } finally {
             setLoading(false);
         }
@@ -59,7 +58,7 @@ export default function VisualizationPage() {
         return str.replace(/-/g, ' ');
     };
 
-    // Calcul dynamique des options de filtres basé sur les données réelles
+    // Calcul dynamique des options de filtres base sur les donnees reelles
     const filterOptions = useMemo(() => {
         const winners = new Set<string>();
         const servers = new Set<string>();
@@ -104,7 +103,7 @@ export default function VisualizationPage() {
     const activeCount = filteredData.filter(p => p.isVisible).length;
 
     const handlePointClick = (point: any) => {
-        // Si filtré (invisible), on ne clique pas (sauf si on veut explicitement permettre)
+        // Si le point est filtre, on ignore le clic.
         if (point.isVisible === false) return;
         setSelectedPoint(point);
     };
@@ -134,7 +133,7 @@ export default function VisualizationPage() {
                         <div>
                             <h1 className="text-xl font-semibold tracking-tight">Visualisation des Embeddings</h1>
                             <p className="text-xs text-gray-400">
-                                Points affichés: <span className="text-white font-mono">{loading ? '...' : `${activeCount} / ${data.length}`}</span>
+                                Points affiches: <span className="text-white font-mono">{loading ? '...' : `${activeCount} / ${data.length}`}</span>
                             </p>
                         </div>
                     </div>
@@ -162,7 +161,7 @@ export default function VisualizationPage() {
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#3a3a3c]/50 text-gray-300 hover:bg-[#3a3a3c] transition-all border border-[#3a3a3c]"
                         >
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                            {loading ? '...' : 'Rafraîchir'}
+                            {loading ? '...' : 'Rafraichir'}
                         </button>
                     </div>
                 </div>
@@ -214,7 +213,7 @@ export default function VisualizationPage() {
                                 </select>
                             </div>
 
-                            {/* Numéro de Set */}
+                            {/* Numero de set */}
                             <div className="space-y-1.5">
                                 <label className="text-xs text-gray-400 font-medium">Set</label>
                                 <select
@@ -259,9 +258,9 @@ export default function VisualizationPage() {
                                 </select>
                             </div>
 
-                            {/* Longueur Échange */}
+                            {/* Longueur echange */}
                             <div className="space-y-1.5">
-                                <label className="text-xs text-gray-400 font-medium">Longueur Échange</label>
+                                <label className="text-xs text-gray-400 font-medium">Longueur echange</label>
                                 <select
                                     value={minShotsFilter}
                                     onChange={(e) => setMinShotsFilter(e.target.value)}
@@ -287,7 +286,7 @@ export default function VisualizationPage() {
                     </div>
 
                     <div className="bg-[#1c1c1e]/50 p-4 rounded-xl border border-[#3a3a3c] text-xs text-gray-500">
-                        <p>💡 <b>Note:</b> {is3DMode ? "Utilisez la souris pour tourner (clic gauche), déplacer (clic droit) et zoomer (molette)." : "Les points s'estompent lorsqu'ils sont filtrés pour conserver la structure du graphique."}</p>
+                        <p><b>Note:</b> {is3DMode ? "Utilisez la souris pour tourner (clic gauche), deplacer (clic droit) et zoomer (molette)." : "Les points s'estompent lorsqu'ils sont filtres pour conserver la structure du graphique."}</p>
                     </div>
                 </div>
 
@@ -298,12 +297,12 @@ export default function VisualizationPage() {
                             <div>
                                 <p className="text-lg font-bold mb-2">Erreur de chargement</p>
                                 <p className="text-sm opacity-80">{error}</p>
-                                <button onClick={() => fetchData(true)} className="mt-4 px-4 py-2 bg-red-900/20 rounded-lg text-sm hover:bg-red-900/40">Réessayer</button>
+                                <button onClick={() => fetchData(true)} className="mt-4 px-4 py-2 bg-red-900/20 rounded-lg text-sm hover:bg-red-900/40">Reessayer</button>
                             </div>
                         </div>
                     ) : (
                         <div className="h-full w-full">
-                            {/* Le panneau de détail apparaît en overlay "absolu" si un point est sélectionné */}
+                            {/* Panneau de detail pour le point selectionne */}
                             {selectedPoint && (
                                 <div className="absolute top-4 right-4 z-20 w-80 bg-[#1c1c1e]/95 backdrop-blur-md border border-[#3a3a3c] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100%-32px)] transition-all animate-in fade-in slide-in-from-right-4">
                                     <div className="relative aspect-video bg-black">
@@ -332,7 +331,7 @@ export default function VisualizationPage() {
 
                                         <Link href={`/watch/${selectedPoint.match_id}?point=${selectedPoint.point_id}`} className="block">
                                             <button className="w-full py-2 bg-[#0a84ff] hover:bg-[#007aff] text-white rounded-lg text-xs font-bold transition-colors">
-                                                Analyser en détail
+                                                Analyser en detail
                                             </button>
                                         </Link>
                                     </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
+import { API_URL } from "@/lib/api";
 import { loadFavorites, upsertFavorite, removeFavorite } from "@/lib/favorites";
 
 
@@ -17,10 +18,13 @@ interface SearchResult {
     point_number?: number;
     point_id?: number;
     clip_id?: string;
+    clip_path?: string;
     winner?: string;
     serveur?: string;
     faute_type?: string;
     dernier_coup?: string;
+    service_zone?: string;
+    service_lateralite?: string;
     nb_coups?: number;
     duree?: number;
     duree_secondes?: number;
@@ -84,7 +88,6 @@ interface SearchStats {
     duree?: { min: number; max: number; avg: number };
 }
 
-const API_URL = "http://localhost:8001";
 type SearchMode = "semantic" | "highlights" | "llm";
 const FILTER_KEYS = [
     "match_id",
@@ -699,7 +702,16 @@ function SearchContent() {
         if (value !== "highlights") {
             setShowHighlightSettings(false);
         }
-        updateUrl({ mode: value });
+        // Clear LLM-specific state when leaving LLM mode
+        const extraResets: Record<string, string> = { mode: value };
+        if (value !== "llm") {
+            setLlmAppliedFilters(null);
+            setLlmParsedFilters(null);
+            setLlmFilterChanges([]);
+            setLlmExplanation(null);
+            setLlmProvider(null);
+        }
+        updateUrl(extraResets);
     };
 
     // Slug and Clip helpers
@@ -1249,80 +1261,71 @@ function SearchContent() {
                 </div>
             )}
 
-            {false && searchMode === "llm" && ((llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0) || llmFilterChanges.length > 0 || llmExplanation) && (
-                <div className="mb-6 p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
-                    <div className="mb-3 flex items-center justify-between gap-4">
-                        <span className="text-sm font-medium text-emerald-300">Filtres interprétés</span>
+            {searchMode === "llm" && ((llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0) || llmExplanation) && (
+                <div className="mb-6 rounded-xl border border-emerald-500/30 bg-[color-mix(in_srgb,var(--card)_92%,#10b981_8%)] overflow-hidden">
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-emerald-500/20">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm">🤖</span>
+                            <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-300">Interprétation LLM</span>
+                        </div>
                         {llmProvider && (
-                            <span className="text-xs text-emerald-100/70">
-                                Source: OpenAI
+                            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-200">
+                                OpenAI · {llmProvider}
                             </span>
                         )}
                     </div>
-                    {llmFilterChanges.length > 0 && (
-                        <div className="mb-3 flex flex-col gap-2">
-                            {llmFilterChanges.map((change) => (
-                                <div
-                                    key={`${change.key}-${change.change_type}-${String(change.value)}`}
-                                    className="rounded-lg border border-emerald-500/20 bg-black/10 px-3 py-2 text-xs text-emerald-100"
-                                >
-                                    {getFilterChangeText(change)}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    {llmParsedFilters && Object.keys(llmParsedFilters).length > 0 && (
-                        <div className="mb-3">
-                            <div className="mb-2 text-xs text-emerald-100/70">Filtres proposés par le LLM</div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                {Object.entries(llmParsedFilters).map(([key, value]) => (
-                                    <span
-                                        key={key}
-                                        className="px-2 py-1 rounded-full text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                                    >
-                                        {formatFilterLabel(key)}: {formatFilterValue(key, value)}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0 && (
-                        <div className="mb-2">
-                            <div className="mb-2 text-xs text-emerald-100/70">Filtres finalement appliqués</div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                {Object.entries(llmAppliedFilters).map(([key, value]) => (
-                                    <span
-                                        key={key}
-                                        className="px-2 py-1 rounded-full text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                                    >
-                                        {formatFilterLabel(key)}: {formatFilterValue(key, value)}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {llmExplanation && (
-                        <p className="text-xs text-emerald-100/80">{llmExplanation}</p>
-                    )}
-                </div>
-            )}
 
-            {false && searchMode === "llm" && llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0 && (
-                <div className="mb-6 p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className="text-sm font-medium text-emerald-300">Filtres interprétés</span>
-                        {Object.entries(llmAppliedFilters).map(([key, value]) => (
-                            <span
-                                key={key}
-                                className="px-2 py-1 rounded-full text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                            >
-                                {formatFilterLabel(key)}: {String(value)}
-                            </span>
-                        ))}
+                    <div className="px-4 py-3 space-y-3">
+                        {/* LLM Explanation */}
+                        {llmExplanation && (
+                            <p className="text-sm text-foreground/80 italic">
+                                &ldquo;{llmExplanation}&rdquo;
+                            </p>
+                        )}
+
+                        {/* Applied filter chips */}
+                        {llmAppliedFilters && Object.keys(llmAppliedFilters).length > 0 && (
+                            <div>
+                                <div className="mb-1.5 text-xs font-medium text-muted-foreground">Filtres appliqués</div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {Object.entries(llmAppliedFilters).map(([key, value]) => (
+                                        <span
+                                            key={key}
+                                            className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-200"
+                                        >
+                                            <span className="text-emerald-500/70 dark:text-emerald-400/60">{formatFilterLabel(key)}:</span>
+                                            {formatFilterValue(key, value)}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Filter changes (added/overridden by LLM or user) */}
+                        {llmFilterChanges && llmFilterChanges.length > 0 && (
+                            <div>
+                                <div className="mb-1.5 text-xs font-medium text-muted-foreground">Changements</div>
+                                <div className="flex flex-col gap-1">
+                                    {llmFilterChanges.map((change) => (
+                                        <div
+                                            key={`${change.key}-${change.change_type}-${String(change.value)}`}
+                                            className="flex items-center gap-2 text-xs text-foreground/70"
+                                        >
+                                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${
+                                                change.change_type === "added_by_llm"
+                                                    ? "bg-emerald-500"
+                                                    : change.change_type === "overridden_by_user"
+                                                        ? "bg-amber-500"
+                                                        : "bg-blue-500"
+                                            }`} />
+                                            {getFilterChangeText(change)}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
-                    {llmExplanation && (
-                        <p className="text-xs text-emerald-100/80">{llmExplanation}</p>
-                    )}
                 </div>
             )}
 

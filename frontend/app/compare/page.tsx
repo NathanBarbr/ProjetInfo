@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 import MomentumChart from "@/components/MomentumChart";
+import { API_URL } from "@/lib/api";
 
-const API_URL = "http://localhost:8001"; // search/backend API
 const DEFAULT_MATCHES = [
     "FAN-ZHENDONG_vs_TRULS-MOREGARD",
     "HUGO-CALDERANO_vs_FELIX-LEBRUN",
@@ -342,7 +342,7 @@ function RadarChart({ statsA, statsB, playerA, playerB }: {
     );
 }
 
-export default function ComparePage() {
+function CompareContent() {
     const searchParams = useSearchParams();
     const matchId = searchParams.get("match_id") || "";
     const [data, setData] = useState<CompareData | null>(null);
@@ -638,5 +638,13 @@ export default function ComparePage() {
                 )}
             </main>
         </div>
+    );
+}
+
+export default function ComparePage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen" style={{ background: "var(--background)", color: "var(--foreground)" }} />}>
+            <CompareContent />
+        </Suspense>
     );
 }

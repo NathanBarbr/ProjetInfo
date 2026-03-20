@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 import PointTrajectory from "@/components/PointTrajectory";
+import { API_URL } from "@/lib/api";
 
-const API_URL = "http://localhost:8001";
 const TABLE_WIDTH = 612;
 const TABLE_HEIGHT = 367;
 const DISPLAY_WIDTH = TABLE_HEIGHT;

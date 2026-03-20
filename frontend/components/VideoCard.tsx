@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { API_URL } from "@/lib/api";
 
 interface VideoCardProps {
     id: string;
@@ -19,7 +20,7 @@ export default function VideoCard({ id, title, description }: VideoCardProps) {
                 style={{ borderRadius: '12px' }}
             >
                 <img
-                    src={`http://localhost:8001/api/videos/${id}/thumbnail`}
+                    src={`${API_URL}/api/videos/${id}/thumbnail`}
                     alt={title}
                     className="w-full h-full object-cover"
                     onError={(e) => {

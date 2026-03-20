@@ -9,6 +9,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import ServerProfilePanel from "@/components/ServerProfilePanel";
 import PointTrajectory from "@/components/PointTrajectory";
 import MomentumChart from "@/components/MomentumChart";
+import { API_URL as BACKEND_API_URL } from "@/lib/api";
 import { FavoriteItem, loadFavorites, upsertFavorite, removeFavorite } from "@/lib/favorites";
 
 
@@ -60,8 +61,8 @@ interface CommentItem {
     createdAt: number;
 }
 
-const API_URL = "http://localhost:8001";          // vidéos/streams
-const SEARCH_API_URL = "http://localhost:8001";   // FastAPI + ES
+const API_URL = BACKEND_API_URL;
+const SEARCH_API_URL = BACKEND_API_URL;
 
 export default function WatchPage() {
     const params = useParams();
@@ -319,13 +320,13 @@ export default function WatchPage() {
         const p = pointDetail;
         if (!p) return "Point complet.";
         const parts: string[] = [];
-        parts.push(`Set ${p.set_num ?? "?"} · Point ${p.point_id ?? "?"}`);
+        parts.push(`Set ${p.set_num ?? "?"} - Point ${p.point_id ?? "?"}`);
         if (p.nb_coups !== undefined) parts.push(`${p.nb_coups} coups`);
         if (p.duree_frames !== undefined) parts.push(`~${Math.max(1, Math.round(p.duree_frames / 25))}s`);
         if (p.serveur) {
             parts.push(`Service ${p.serveur}${p.service_zone ? ` (${p.service_zone})` : ""}${p.service_lateralite ? ` main ${p.service_lateralite.replace("_", " ")}` : ""}`);
         }
-        if (p.winner) parts.push(`Point remporté par ${p.winner}${p.is_point_gagnant ? " (gagnant direct)" : ""}`);
+        if (p.winner) parts.push(`Point remporte par ${p.winner}${p.is_point_gagnant ? " (gagnant direct)" : ""}`);
         if (p.faute_type && p.faute_type !== "pt_gagne") parts.push(`Fin sur faute : ${p.faute_type}`);
         if (p.dernier_coup) parts.push(`Dernier coup : ${p.dernier_coup}`);
         if (p.is_set_point) parts.push("Balle de set");
@@ -504,7 +505,7 @@ export default function WatchPage() {
                                 onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
                                 onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                             >
-                                ← Return to gallery
+                                Return to gallery
                             </Link>
                         </div>
                     )}
@@ -534,7 +535,7 @@ export default function WatchPage() {
                                                 style={{ background: "color-mix(in srgb, var(--card) 88%, transparent)", border: "1px solid var(--border)", color: "var(--foreground)" }}
                                                 aria-label="Fermer le mini lecteur"
                                             >
-                                                ×
+                                                x
                                             </button>
                                         )}
                                         <VideoPlayer
@@ -591,7 +592,7 @@ export default function WatchPage() {
                                             type="text"
                                             value={newComment}
                                             onChange={(e) => setNewComment(e.target.value)}
-                                            placeholder="Écris un commentaire…"
+                                            placeholder="Ecris un commentaire..."
                                             className="flex-1 px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") addComment();
@@ -605,7 +606,7 @@ export default function WatchPage() {
                                         </button>
                                     </div>
                                     {comments.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">Aucun commentaire pour l’instant.</p>
+                                        <p className="text-sm text-muted-foreground">Aucun commentaire pour l'instant.</p>
                                     ) : (
                                         <div className="space-y-3 max-h-64 overflow-auto pr-1">
                                             {comments.map((c, idx) => (
@@ -650,7 +651,7 @@ export default function WatchPage() {
                         </div>
                     )}
 
-                    {/* Server Profile Panel — full width below video */}
+                    {/* Server Profile Panel - full width below video */}
                     {currentClip && pointDetail?.serveur && (
                         <div className="mt-8 max-w-5xl mx-auto">
                             <ServerProfilePanel
@@ -676,7 +677,7 @@ export default function WatchPage() {
                                     className="text-xs px-4 py-2 rounded-lg inline-flex items-center gap-1.5 transition-colors"
                                     style={{ background: "var(--card)", color: "var(--primary)", border: "1px solid var(--border)" }}
                                 >
-                                    Voir la comparaison complète des joueurs
+                                    Voir la comparaison complete des joueurs
                                 </Link>
                             </div>
                         </div>

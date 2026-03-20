@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { API_URL } from "@/lib/api";
 
 interface Message {
     role: "user" | "assistant";
@@ -17,8 +18,6 @@ interface PointResult {
     description: string;
     winner?: string;
 }
-
-const API_URL = "http://localhost:8001";
 
 export default function ChatWidget() {
     const [isOpen, setIsOpen] = useState(false);
