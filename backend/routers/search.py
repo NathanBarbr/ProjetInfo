@@ -6,6 +6,7 @@ import os
 import json
 import re
 import logging
+from collections import Counter
 from difflib import SequenceMatcher
 from typing import Any, Dict, Optional, List
 from urllib.request import Request, urlopen
@@ -1478,97 +1479,81 @@ async def get_player_compare(match_id: str):
     player_a = name_hits[0]["_source"]["player_A"]
     player_b = name_hits[0]["_source"]["player_B"]
 
-    def build_player_aggs(player_name):
-        return {
-            "size": 0,
-            "query": {"bool": {"filter": [{"term": {"match_id": match_id}}]}},
-            "aggs": {
-                "total_points_won": {
-                    "filter": {"term": {"winner": player_name}}
-                },
-                "service_points": {
-                    "filter": {"term": {"serveur": player_name}},
-                    "aggs": {
-                        "won": {"filter": {"term": {"winner": player_name}}},
-                        "avg_rally": {"avg": {"field": "nb_coups"}}
-                    }
-                },
-                "receive_points": {
-                    "filter": {"bool": {"must_not": [{"term": {"serveur": player_name}}]}},
-                    "aggs": {
-                        "won": {"filter": {"term": {"winner": player_name}}},
-                    }
-                },
-                "avg_rally_when_winning": {
-                    "filter": {"term": {"winner": player_name}},
-                    "aggs": {"avg_coups": {"avg": {"field": "nb_coups"}}}
-                },
-                "winning_shots": {
-                    "filter": {"term": {"winner": player_name}},
-                    "aggs": {"shots": {"terms": {"field": "dernier_coup", "size": 10}}}
-                },
-                "faults_committed": {
-                    "filter": {"bool": {"must_not": [{"term": {"winner": player_name}}]}},
-                    "aggs": {"types": {"terms": {"field": "faute_type", "size": 10}}}
-                },
-            }
-        }
+    points_query = {
+        "size": 500,
+        "query": {"term": {"match_id": match_id}},
+        "sort": [{"set_num": "asc"}, {"point_id": "asc"}],
+        "_source": [
+            "player_A", "player_B", "winner", "serveur",
+            "nb_coups", "dernier_coup", "faute_type", "sequence_coups"
+        ],
+    }
 
-    def extract_stats(response, player_name, total):
-        aggs = response.get("aggregations", {})
-        points_won = aggs["total_points_won"]["doc_count"]
-        svc = aggs["service_points"]
-        rcv = aggs["receive_points"]
+    try:
+        points_resp = es_request("POST", f"/{ES_INDEX}/_search", points_query)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-        svc_total = svc["doc_count"]
-        svc_won = svc["won"]["doc_count"]
-        rcv_total = rcv["doc_count"]
-        rcv_won = rcv["won"]["doc_count"]
+    points = [hit.get("_source", {}) for hit in points_resp.get("hits", {}).get("hits", [])]
+    total = len(points)
 
-        avg_rally_win = aggs["avg_rally_when_winning"].get("avg_coups", {}).get("value", 0) or 0
+    def compute_stats(player_name: str):
+        points_won = 0
+        service_total = 0
+        service_won = 0
+        receive_total = 0
+        receive_won = 0
+        winning_rally_total = 0
+        service_rally_total = 0
+        winning_shots: Counter[str] = Counter()
+        faults: Counter[str] = Counter()
 
-        winning_shots = [
-            {"shot": b["key"], "count": b["doc_count"]}
-            for b in aggs["winning_shots"].get("shots", {}).get("buckets", [])
-        ]
-        faults = [
-            {"type": b["key"], "count": b["doc_count"]}
-            for b in aggs["faults_committed"].get("types", {}).get("buckets", [])
-        ]
+        for point in points:
+            winner = infer_point_winner(point)
+            serveur = str(point.get("serveur", "") or "")
+            nb_coups = int(point.get("nb_coups", 0) or 0)
+            dernier_coup = str(point.get("dernier_coup", "") or "")
+            faute_type = str(point.get("faute_type", "") or "")
+
+            if serveur == player_name:
+                service_total += 1
+                service_rally_total += nb_coups
+                if winner == player_name:
+                    service_won += 1
+            else:
+                receive_total += 1
+                if winner == player_name:
+                    receive_won += 1
+
+            if winner == player_name:
+                points_won += 1
+                winning_rally_total += nb_coups
+                if dernier_coup:
+                    winning_shots[dernier_coup] += 1
+            elif faute_type:
+                faults[faute_type] += 1
 
         return {
             "player": player_name,
             "points_won": points_won,
             "points_lost": total - points_won,
             "win_rate": round(points_won / total * 100, 1) if total > 0 else 0,
-            "service_total": svc_total,
-            "service_won": svc_won,
-            "service_win_rate": round(svc_won / svc_total * 100, 1) if svc_total > 0 else 0,
-            "receive_total": rcv_total,
-            "receive_won": rcv_won,
-            "receive_win_rate": round(rcv_won / rcv_total * 100, 1) if rcv_total > 0 else 0,
-            "avg_rally_length_when_winning": round(avg_rally_win, 1),
-            "avg_service_rally": round(svc.get("avg_rally", {}).get("value", 0) or 0, 1),
-            "winning_shots": winning_shots,
-            "faults": faults,
+            "service_total": service_total,
+            "service_won": service_won,
+            "service_win_rate": round(service_won / service_total * 100, 1) if service_total > 0 else 0,
+            "receive_total": receive_total,
+            "receive_won": receive_won,
+            "receive_win_rate": round(receive_won / receive_total * 100, 1) if receive_total > 0 else 0,
+            "avg_rally_length_when_winning": round(winning_rally_total / points_won, 1) if points_won > 0 else 0,
+            "avg_service_rally": round(service_rally_total / service_total, 1) if service_total > 0 else 0,
+            "winning_shots": [{"shot": shot, "count": count} for shot, count in winning_shots.most_common(10)],
+            "faults": [{"type": fault_type, "count": count} for fault_type, count in faults.most_common(10)],
         }
-
-    try:
-        total_resp = es_request("POST", f"/{ES_INDEX}/_search", {
-            "size": 0,
-            "query": {"term": {"match_id": match_id}},
-        })
-        total = total_resp["hits"]["total"]["value"]
-
-        resp_a = es_request("POST", f"/{ES_INDEX}/_search", build_player_aggs(player_a))
-        resp_b = es_request("POST", f"/{ES_INDEX}/_search", build_player_aggs(player_b))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
     return {
         "match_id": match_id,
         "total_points": total,
-        "player_A": extract_stats(resp_a, player_a, total),
-        "player_B": extract_stats(resp_b, player_b, total),
+        "player_A": compute_stats(player_a),
+        "player_B": compute_stats(player_b),
     }
 
