@@ -7,6 +7,21 @@ import { RefreshCw, ArrowLeft, Filter, X, Box, Square } from "lucide-react";
 import Link from 'next/link';
 import { API_URL } from '@/lib/api';
 
+function getSlug(matchId: string) {
+    const mapping: Record<string, string> = {
+        "FAN-ZHENDONG_vs_TRULS-MOREGARD": "fan-zhendong-vs-moregard",
+        "HUGO-CALDERANO_vs_FELIX-LEBRUN": "hugo-calderano-vs-felix-lebrun",
+    };
+    return mapping[matchId] || matchId.toLowerCase().replace(/_/g, "-");
+}
+
+function getClipId(point: { clip_path?: string; set_num?: number; point_id: number }) {
+    if (point.clip_path) {
+        const parts = point.clip_path.split("/");
+        if (parts.length >= 2) return parts[1];
+    }
+    return `set_${point.set_num ?? 1}_point_${point.point_id}`;
+}
 
 export default function VisualizationPage() {
     const [data, setData] = useState<any[]>([]);
@@ -329,7 +344,10 @@ export default function VisualizationPage() {
                                         </div>
                                         <p className="text-xs text-gray-400 italic mb-4 border-l-2 border-[#3a3a3c] pl-2">{selectedPoint.description}</p>
 
-                                        <Link href={`/watch/${selectedPoint.match_id}?point=${selectedPoint.point_id}`} className="block">
+                                        <Link
+                                            href={`/watch/${getSlug(selectedPoint.match_id)}?clip=${getClipId(selectedPoint)}`}
+                                            className="block"
+                                        >
                                             <button className="w-full py-2 bg-[#0a84ff] hover:bg-[#007aff] text-white rounded-lg text-xs font-bold transition-colors">
                                                 Analyser en detail
                                             </button>
