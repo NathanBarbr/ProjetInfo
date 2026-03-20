@@ -1,0 +1,53 @@
+\documentclass[11pt]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\title[Visualisations]{Stack technique des visualisations frontend}
+\subtitle{Projet Full-Stack - Analyse de Performance Sportive avec IA}
+\institute[Projet Informatique]{Projet Informatique}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}{Stack technique des visualisations}
+\begin{table}
+\centering
+\scriptsize
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Visualisation} & \textbf{Techno / Librairie} & \textbf{Fichier} \\
+\hline
+Trajectoire du point & React + SVG inline + \texttt{<animate>} & \texttt{PointTrajectory} \\
+\hline
+Sketch Search & React + SVG inline & \texttt{sketch/page} \\
+\hline
+Momentum du match & React + SVG (paths, gradients) & \texttt{MomentumChart} \\
+\hline
+Profil serveur & React + SVG (jauges, heatmap) & \texttt{ServerProfilePanel} \\
+\hline
+Face-à-face (radar) & React + SVG (polygones) & \texttt{compare/page} \\
+\hline
+Carte embeddings 2D & \textcolor{blue}{Recharts} (ScatterChart) & \texttt{EmbeddingChart} \\
+\hline
+Carte embeddings 3D & \textcolor{blue}{Three.js} + react-three/fiber & \texttt{EmbeddingChart3D} \\
+\hline
+Lecteur vidéo & HTML5 \texttt{<video>} + SVG & \texttt{VideoPlayer} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{alertblock}{Philosophie}
+\small
+\textbf{5 visus sur 8 en SVG inline pur} (zéro dépendance charting).\\
+Seules exceptions : Recharts (scatter 2D) et Three.js (3D WebGL).
+\end{alertblock}
+\end{frame}
+
+\end{document}

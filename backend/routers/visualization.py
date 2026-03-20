@@ -3,6 +3,8 @@ Router pour la visualisation des embeddings.
 Gère la réduction de dimension (PCA/t-SNE) pour l'affichage frontend.
 """
 
+import os
+
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any, Optional
 import numpy as np
@@ -14,7 +16,9 @@ from sklearn.decomposition import PCA
 from embeddings.indexer import ElasticSearchIndexer
 
 router = APIRouter(prefix="/api/visualization", tags=["visualization"])
-indexer = ElasticSearchIndexer()
+indexer = ElasticSearchIndexer(
+    host=os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
+)
 
 from routers.search import build_es_query
 

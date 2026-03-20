@@ -1,0 +1,96 @@
+\documentclass[aspectratio=169, 11pt]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\usetheme{Madrid}
+\usecolortheme{beaver}
+
+\setbeamercolor{frametitle}{fg=black,bg=white}
+\setbeamercolor{title in head/foot}{fg=black,bg=white}
+
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.82\paperwidth,ht=2.25ex,dp=1ex,leftskip=1.2ex]{author in head/foot}%
+      \usebeamerfont{author in head/foot}%
+      \footnotesize RVP2 --- Moteur de recherche multimodal (Ping) --- Barbier / Ledoux / Pascal / Wone
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.18\paperwidth,ht=2.25ex,dp=1ex,right,rightskip=1.2ex]{page number in head/foot}%
+      \usebeamerfont{page number in head/foot}%
+      \footnotesize \insertframenumber/\inserttotalframenumber
+    \end{beamercolorbox}%
+  }%
+}
+
+\title[Highlights]{Fonctionnement du mode Highlights}
+\author{Nathan Barbier - Projet Informatique}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}{Comment fonctionne le mode Highlights ?}
+    \begin{columns}[T,onlytextwidth]
+        \begin{column}{0.52\textwidth}
+            {\small
+            \begin{block}{Principe}
+                Le backend appelle \texttt{/api/semantic/highlights}, filtre les points
+                (match, gagnant, serveur, set), puis attribue a chaque point un
+                \textbf{score explicite sur 100}.
+            \end{block}
+
+            \begin{block}{Score calcule}
+                \textbf{Highlight score} =
+                \[
+                \sum_i w_i \times s_i
+                \]
+                avec des poids normalises. Par defaut :
+                \textbf{duree 35\%}, \textbf{profondeur du rallye 15\%},
+                \textbf{variete des effets 15\%},
+                \textbf{variete des lateralites 10\%},
+                \textbf{variete des zones 10\%},
+                \textbf{fin du point 10\%},
+                \textbf{pression du score 5\%}.
+            \end{block}
+
+            \begin{block}{Ce que le score regarde concretement}
+                \begin{itemize}
+                    \item \textbf{Duree / nb de coups} : un echange long monte dans le classement.
+                    \item \textbf{Variete} : plus la sequence change d'effets, de zones ou de lateralites, plus le point est riche.
+                    \item \textbf{Fin du point} : \texttt{pt\_gagne} est tres valorise ; un dernier coup agressif (\texttt{topspin}, \texttt{flip}) ajoute encore du score.
+                    \item \textbf{Contexte} : un point serre en fin de set, ou une balle de set, augmente la note.
+                \end{itemize}
+            \end{block}
+
+            \begin{alertblock}{Resultat}
+                Les points sont tries par \texttt{highlight\_score} decroissant :
+                le mode Highlights ne cherche donc pas un texte similaire,
+                il \textbf{classe automatiquement les plus beaux points}.
+            \end{alertblock}
+            }
+        \end{column}
+
+        \begin{column}{0.46\textwidth}
+            \vspace{0.2cm}
+            \begin{beamercolorbox}[wd=\linewidth,ht=0.68\textheight,dp=0.2cm,center,rounded=true,shadow=true]{block body}
+                \vfill
+                {\Large Screenshot du mode Highlights}
+
+                \vspace{0.3cm}
+                {\normalsize A inserer ici}
+                \vfill
+            \end{beamercolorbox}
+
+            \vspace{0.2cm}
+            {\scriptsize
+            Astuce orale : expliquer que les ponderations sont reglables dans l'interface,
+            puis montrer visuellement comment le classement change.}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\end{document}
